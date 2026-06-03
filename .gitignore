@@ -14,34 +14,27 @@ build/
 
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 env/
 
 # Jupyter
 .ipynb_checkpoints/
 
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
 # OS
 .DS_Store
+Thumbs.db
 
-# Dataset & generated data
-single-infrastructure-side/
-single-infrastructure-side-image/
-single-infrastructure-side 3/
+# Datasets (raw sources, symlinks, conversions, large splits)
+# All raw datasets now live under V2X-Raw-Datasets/ (incl. single-infrastructure-side[-image])
 V2X-Raw-Datasets/
-data/dair-v2x-i
-data/dair-v2x-i-kitti/
-data/dair-v2x-c-i/
-data/dair-v2x-c-i
-data/dair-v2x-c-i-kitti/
-data/dair-v2x-i-s1/
-data/dair-v2x-i-s1
-data/dair-v2x-i-s1-kitti/
-data/dair-v2x-i-s2/
-data/dair-v2x-i-s2
-data/dair-v2x-i-s2-kitti/
-data/dair-v2x-v/
-data/dair-v2x-v
-data/dair-v2x-v-kitti/
+data/dair-v2x-*
 data/v2x-*-split*.json
 *.pkl
 
@@ -52,6 +45,10 @@ outputs/
 # External research repos
 external/
 
-# Internal notes
+# Stray CI config (auto-generated, unrelated to this project)
+.github/java-upgrade/
+
+# Internal notes & shared artifacts
 plan/
 summary/
+toshare/
