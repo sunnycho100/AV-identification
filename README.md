@@ -1,256 +1,206 @@
-<p align="center">
+# AV Identification from Roadside 3D Detection
 
-  <h1 align="center">BEVHeight: A Robust Framework for Vision-based Roadside 3D Object Detection</h1>
-  <p align="center">
-    <a href="https://scholar.google.com/citations?user=EUnI2nMAAAAJ&hl=zh-CN"><strong>Lei Yang</strong></a>
-    ·
-    <a href="https://scholar.google.com.hk/citations?user=Jtmq_m0AAAAJ&hl=zh-CN&oi=sra"><strong>Kaicheng Yu</strong></a>
-    ·
-    <a href="https://scholar.google.com.hk/citations?user=1ltylFwAAAAJ&hl=zh-CN&oi=sra"><strong>Tao Tang</strong></a>
-    ·
-    <a href="https://www.tsinghua.edu.cn/"><strong>Jun Li</strong></a>
-    ·
-    <a href="https://scholar.google.com.hk/citations?user=aMnHLz4AAAAJ&hl=zh-CN&oi=ao"><strong>Kun Yuan</strong></a>
-    ·
-    <a href="https://scholar.google.com.hk/citations?user=kLTnwAsAAAAJ&hl=zh-CN&oi=sra"><strong>Li Wang</strong></a>
-    ·
-    <a href="https://scholar.google.com.hk/citations?user=0Q7pN4cAAAAJ&hl=zh-CN&oi=sra"><strong>Xinyu Zhang</strong></a>
-    ·
-    <a href="https://damo.alibaba.com/labs/intelligent-transportation"><strong>Peng Chen</strong></a>
-  </p>
+Internal lab project (CATS-Lab). This repo started as a fork of **BEVHeight**
+(CVPR 2023) and is being extended toward a different research goal. The original
+upstream README is preserved in [`prev-readme.md`](prev-readme.md).
 
+> This README is an internal progress document. It tracks what each component
+> does, what is finished, what is parked, and what is next. It is meant for the
+> author, advisor, and labmates, not as a public release doc.
 
-<h2 align="center">CVPR 2023</h2>
-  <div align="center">
-    <img src="./assets/teaser_intro.jpg" alt="Logo" width="88%">
-  </div>
+---
 
-<p align="center">
-  <br>
-    <a href="https://pytorch.org/get-started/locally/"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-ee4c2c?logo=pytorch&logoColor=white"></a>
-    <a href="https://pytorchlightning.ai/"><img alt="Lightning" src="https://img.shields.io/badge/-Lightning-792ee5?logo=pytorchlightning&logoColor=white"></a>
-     <a href='https://hub.docker.com/repository/docker/yanglei2024/op-bevheight/general'><img src='https://img.shields.io/badge/Docker-9cf.svg?logo=Docker' alt='Docker'></a>
-    <br></br>
-    <a href="https://arxiv.org/abs/2303.08498">
-      <img src='https://img.shields.io/badge/Paper-PDF-green?style=for-the-badge&logo=adobeacrobatreader&logoWidth=20&logoColor=white&labelColor=66cc00&color=94DD15' alt='Paper PDF'>
-    </a>
-  </p>
-</p>
+## Ultimate goal
 
-**BEVHeight** is a new vision-based 3D object detector specially designed for roadside scenario. BEVHeight surpasses BEVDepth base-
-line by a margin of 4.85% and 4.43% on **DAIR-V2X-I** and **Rope3D** benchmarks under the traditional clean settings, and by **26.88%** on robust settings where external camera parameters changes. We hope our work can shed light on studying more effective feature representation on **roadside perception**.
+Take video from a fixed roadside (infrastructure) camera and decide, for each
+vehicle in view, whether it is an **autonomous vehicle (AV)** or a
+**human-driven** one, purely from how it moves.
 
+The full intended chain:
 
-# News
-- [2024/05] BEVHeight is integrated into **NVIDIA [DeepStream-3D](https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_3D_MultiModal_Lidar_Camera_V2XFusion.html)** for sensor fusion.
-- [2023/03/15] Both arXiv and codebase are released!
-- [2023/02/27] BEVHeight got accepted to CVPR 2023!
-
-# Incoming
-
-- [ ] Release the pretrained models
-- [ ] Support train and test on a custom dataset
-
-<br>
-
-<!-- TABLE OF CONTENTS -->
-<details open="open" style='padding: 10px; border-radius:5px 30px 30px 5px; border-style: solid; border-width: 1px;'>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#Getting Started">Getting Started</a>
-    </li>
-    <li>
-      <a href="#Acknowledgment">Acknowledgment</a>
-    </li>
-    <li>
-      <a href="#Citation">Citation</a>
-    </li>
-  </ol>
-</details>
-
-<br/>
-
-# Getting Started
-
-- [Installation](docs/install.md)
-- [Prepare Dataset](docs/prepare_dataset.md)
-
-Train BEVHeight with 8 GPUs
 ```
-python [EXP_PATH] --amp_backend native -b 8 --gpus 8
+roadside video
+  -> per-frame 3D bounding boxes        (BEVHeight detector)
+  -> camera calibration                 (intrinsic + extrinsic, so boxes sit correctly in the world)
+  -> trajectories                       (associate boxes across frames; position, velocity, acceleration)
+  -> AV vs human classification         (behavior analysis on the trajectories)
 ```
-Eval BEVHeight with 8 GPUs
+
+The research bet: AV motion (smoothness, jerk, lane-keeping, reaction timing)
+differs measurably from human driving, and that difference is detectable from
+external roadside observation in the real world. The closest prior work
+(Maresca et al., 2024) does this in simulation only, so the real-world gap is
+our contribution.
+
+---
+
+## Status at a glance
+
+| Component | What it is | Status |
+|---|---|---|
+| 1. Base detector (BEVHeight) | Vision-based roadside 3D object detection | **Done** (runs on Mac CPU) |
+| 2. Camera calibration | Intrinsic + extrinsic estimation/refinement | **Done, parked** (advisor: good enough, 2026-04-27) |
+| 3. 3D boxing | Per-frame 3D bounding boxes from images | **Done** (inference works; it is BEVHeight's output) |
+| 4. Trajectory extraction | Boxes across frames -> tracks + velocity/accel | **Not started** (planned) |
+| 5. AV identification | Classify each track as AV vs human | **Not started** (the actual research question) |
+
+---
+
+## Components
+
+### 1. Base detector: BEVHeight (done, ported to Mac CPU)
+
+BEVHeight is the upstream vision-based roadside 3D detector. It takes RGB images
+from a fixed infrastructure camera, lifts image features into a Bird's-Eye-View
+grid (Lift-Splat-Shoot), and predicts 3D boxes. It is built for the roadside
+viewpoint rather than an ego-vehicle.
+
+**Our work here:** the upstream code only ran on NVIDIA GPUs. We ported the
+evaluation/inference path to run on a Mac with no CUDA:
+
+- Replaced the custom CUDA voxel-pooling kernel with a pure-PyTorch
+  `scatter_add_` fallback (`ops/voxel_pooling/`).
+- Removed/guarded hardcoded `.cuda()` calls (`layers/backbones/lss_fpn.py`,
+  `layers/heads/bev_height_head.py`).
+- Switched the PyTorch Lightning trainer to single-device CPU in the experiment
+  configs (`exps/dair-v2x/...`).
+
+Inference runs and produces KITTI-format metrics. Details:
+[`personal-documents/3-18-2026.md`](personal-documents/3-18-2026.md) and
+[`personal-documents/3-28-2026.md`](personal-documents/3-28-2026.md).
+Checkpoint used: `BEVHeight_R50_128_102.4_65.48_49_epochs.ckpt`.
+
+### 2. Camera calibration (done, parked)
+
+Calibration finds the camera settings needed to relate 3D world points and 2D
+image pixels. Two separate things:
+
+- **Intrinsics** (fx, fy, cx, cy): the camera's internal settings (zoom and
+  image center). Estimated here by learned models.
+- **Extrinsics** (rotation, translation): where the camera sits and points
+  relative to the road. Refined here by geometry search, not a learned model.
+
+All calibration code is in [`scripts/calibration/`](scripts/calibration/).
+Everything was tested on a **single frame** (`000000`) of the DAIR-V2X-I i-s1
+subset. The planned 20-50 frame batch was never run before the phase was parked.
+
+**Intrinsic models compared:**
+
+- **AnyCalib** (ICCV 2025), `run_anycalib_single.py`. Learned, model-agnostic.
+  Predicts a per-pixel ray field and recovers the full intrinsics in closed
+  form. Input: one RGB image + a camera-model id (`pinhole`). Output:
+  [fx, fy, cx, cy]. Variants run: `anycalib_pinhole`, `anycalib_gen`.
+- **DeepCalib** (2018), `run_deepcalib_single.py`. Older InceptionV3 net.
+  Predicts a single focal + one distortion value from a 299x299 image, which we
+  then convert into pinhole intrinsics. See the limitations note at the top of
+  that script (it gave a degenerate, saturated result on our roadside view).
+
+**Verdict: AnyCalib worked clearly better** for our images. DeepCalib was
+trained on wide-angle/distorted photos and is out-of-distribution for our
+narrower roadside view. DeepCalib's heavy weights were deleted in the June
+cleanup; only the one Single-Net regression weight is kept.
+
+**Extrinsic refinement (orientation only, translation fixed):**
+
+- `road_calibrate_single.py` (object-box proxy): grid-search roll/pitch/yaw to
+  minimize the bottom-edge error between projected 3D boxes and 2D labels.
+- `road_line_calibrate_single.py` (true road-line): detect lane/road-edge lines,
+  map them to the ground plane, grid-search orientation so the lines run
+  longitudinal (minimize |dY/dX|).
+
+`visualize_projection_compare.py` renders before/after overlays and IoU metrics.
+Result summaries were written under `summary/` (the originals; see note below).
+
+**Why parked:** the advisor judged calibration an intermediate step and "good
+enough" on 2026-04-27, with the directive to build the full pipeline first and
+optimize later. Context:
+[`personal-documents/632206-trajectory-pipeline-todo.md`](personal-documents/632206-trajectory-pipeline-todo.md).
+
+### 3. 3D boxing (done, = BEVHeight output)
+
+"Boxing" is just the per-frame 3D bounding boxes the detector produces (class,
+3D size, location, orientation). This is BEVHeight's native output and already
+works through the CPU inference path above. No separate code of ours yet; the
+next phase consumes these boxes.
+
+### 4. Trajectory extraction (not started)
+
+Planned approach (simplest first): take the **centers of the 3D boxes**,
+associate them across frames into per-vehicle tracks (start with
+nearest-center / IoU matching), and compute **2D/3D position, velocity, and
+acceleration** over time. Primary reference for the broader task is below.
+
+### 5. AV identification (not started)
+
+The actual research question: from each trajectory, decide AV vs human. Needs a
+feature definition (smoothness, jerk, lane-keeping, reaction) and a first
+classifier, plus a source of AV-vs-human ground truth. To be scoped with the
+advisor.
+
+Primary reference: **Maresca et al., "Are you a robot? Detecting Autonomous
+Vehicles from Behavior Analysis" (arXiv:2403.09571, 2024)** — same task, but
+simulation-only (CARLA). Full review:
+[`personal-documents/632206-literature-review.md`](personal-documents/632206-literature-review.md).
+
+---
+
+## Repo layout (what matters for this project)
+
 ```
-python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
+models/, layers/, ops/        BEVHeight detector (backbone, BEV head, voxel pooling)
+exps/dair-v2x/, exps/rope3d/  experiment configs (dair-v2x R50_102 is the CPU-patched one)
+evaluators/                   KITTI-format evaluation
+scripts/calibration/          OUR calibration work (AnyCalib, DeepCalib, road refinement)
+scripts/data_converter/       DAIR/Rope3D -> KITTI conversion
+external/                     AnyCalib + DeepCalib clones
+data/                         DAIR-V2X-I (+ subsets), v2x-c, v2x-v
+V2X-Raw-Datasets/             raw infrastructure images (substrate for trajectory phase)
+outputs/calibration/          calibration run artifacts (currently sample 000000 only)
+personal-documents/           dated working logs and plans (internal)
+summary.md                    detailed BEVHeight architecture/summary
 ```
-# Experimental Results
 
+## Running what works today
 
-- DAIR-V2X-I Dataset
-<div align=left>
-<table>
-     <tr align=center>
-        <td rowspan="3">Method</td> 
-        <td rowspan="3" align=center>Config File</td> 
-        <td rowspan="3" align=center>Range</td> 
-        <td colspan="3" align=center>Car</td>
-        <td colspan="3" align=center>Pedestrain</td>
-        <td colspan="3" align=center>Cyclist</td>
-        <td rowspan="3" align=center>model pth</td>
-    </tr>
-    <tr align=center>
-        <td colspan="3" align=center>3D@0.5</td>
-        <td colspan="3" align=center>3D@0.25</td>
-        <td colspan="3" align=center>3D@0.25</td>
-    </tr>
-    <tr align=center>
-        <td>Easy</td>
-        <td>Mod.</td>
-        <td>Hard</td>
-        <td>Easy</td>
-        <td>Mod.</td>
-        <td>Hard</td>
-        <td>Easy</td>
-        <td>Mod.</td>
-        <td>Hard</td>
-    </tr>
-    <tr align=center>
-        <td rowspan="4">BEVHeight</td> 
-         <td><a href=exps/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py>R50_102</td>
-        <td>[0, 102.4]</td> 
-        <td>77.48</td>
-        <td>65.46</td>
-        <td>65.53</td>
-        <td>26.86</td>
-        <td>25.53</td>
-        <td>25.66</td>
-        <td>51.18</td>
-        <td>52.43</td>
-        <td>53.07</td>
-        <td><a href="https://cloud.tsinghua.edu.cn/f/6998b0b000aa45a0861e/?dl=1">model</a></td>
-    </tr>
-    <tr align=center>
-        <td><a href=exps/dair-v2x/bev_height_lss_r50_864_1536_128x128_140.py>R50_140</td>
-        <td>[0, 140.8]</td> 
-        <td>80.80</td>
-        <td>75.23</td>
-        <td>75.31</td>
-        <td>28.13</td>
-        <td>26.73</td>
-        <td>26.88</td>
-        <td>49.63</td>
-        <td>52.27</td>
-        <td>52.98</td>
-        <td><a href="https://cloud.tsinghua.edu.cn/f/4fa0578a8c7347ebb353/?dl=1">model</a></td>
-    </tr>
-    <tr align=center>
-        <td><a href=exps/dair-v2x/bev_height_lss_r101_864_1536_256x256_102.py>R101_102</td>
-        <td>[0, 102.4]</td> 
-        <td>78.06</td>
-        <td>65.94</td>
-        <td>65.99</td>
-        <td>40.45</td>
-        <td>38.70</td>
-        <td>38.82</td>
-        <td>57.61</td>
-        <td>59.90</td>
-        <td>60.39</td>
-        <td><a href="https://cloud.tsinghua.edu.cn/f/acd81d6083b742ddbb64/?dl=1">model</a></td>
-    </tr>
-    <tr align=center>
-        <td><a href=exps/dair-v2x/bev_height_lss_r101_864_1536_256x256_140.py>R101_140</td>
-        <td>[0, 140.8]</td> 
-        <td>81.80</td>
-        <td>76.19</td>
-        <td>76.26</td>
-        <td>38.79</td>
-        <td>37.94</td>
-        <td>38.26</td>
-        <td>58.22</td>
-        <td>60.49</td>
-        <td>61.03</td>
-        <td><a href="https://cloud.tsinghua.edu.cn/f/9a0f179055724f5db6a3/?dl=1">model</a></td>
-    </tr>
-<table>
-</div>
+BEVHeight CPU evaluation (DAIR-V2X-I, R50 102 config):
 
-- Rope3D Dataset
-<td><a href="https://cloud.tsinghua.edu.cn/f/f29279cebcbd4b3c8fb6/?dl=1">hom_train.pkl</a></td> <td><a href="https://cloud.tsinghua.edu.cn/f/3a9f3c7294794456b92d/?dl=1">hom_val.pkl</a></td>
-
-<div align=center>
-<table>
-     <tr align=center>
-        <td rowspan="2">Method</td> 
-        <td rowspan="2" align=center>Config File</td> 
-        <td rowspan="2" align=center>Range</td> 
-        <td colspan="3" align=center>Car | 3D@0.5</td>
-        <td colspan="3" align=center>Big Vehicle | 3D@0.5</td>
-        <td colspan="3" align=center>Car | 3D@0.7</td>
-        <td colspan="3" align=center>Big Vehicle | 3D@0.7</td>
-        <td rowspan="2" align=center>model pth</td>
-    </tr>
-    <tr align=center>
-        <td>Easy</td>
-        <td>Mod.</td>
-        <td>Hard</td>
-        <td>Easy</td>
-        <td>Mod.</td>
-        <td>Hard</td>
-        <td>Easy</td>
-        <td>Mod.</td>
-        <td>Hard</td>
-        <td>Easy</td>
-        <td>Mod.</td>
-        <td>Hard</td>
-    </tr>
-    <tr align=center>
-        <td rowspan="4">BEVHeight</td> 
-         <td><a href=exps/rope3d/bev_height_lss_r50_864_1536_128x128_102.py>R50_102</td>
-        <td>[0, 102.4]</td> 
-        <td>83.49</td>
-        <td>72.46</td>
-        <td>70.17</td>
-        <td>50.73</td>
-        <td>47.81</td>
-        <td>47.80</td>
-        <td>48.12</td>
-        <td>42.45</td>
-        <td>42.34</td>
-        <td>24.58</td>
-        <td>26.25</td>
-        <td>26.28</td>
-        <td><a href="https://cloud.tsinghua.edu.cn/f/fa3e2d07d62a44b7a337/?dl=1">model</a></td>
-    </tr>
-    <tr align=center>
-        <td><a href=exps/rope3d/bev_height_lss_r50_864_1536_128x128_140.py>R50_140</td>
-        <td>[0, 140.8]</td> 
-        <td>85.46</td>
-        <td>79.15</td>
-        <td>79.06</td>
-        <td>64.38</td>
-        <td>65.75</td>
-        <td>65.77</td>
-        <td>46.39</td>
-        <td>42.85</td>
-        <td>42.71</td>
-        <td>27.21</td>
-        <td>33.99</td>
-        <td>34.03</td>
-        <td><a href="https://cloud.tsinghua.edu.cn/f/343be049d5e74d14a5af/?dl=1">model</a></td>
-    </tr>
-</table>
-</div>
-
-# Acknowledgment
-This project is not possible without the following codebases.
-* [BEVDepth](https://github.com/Megvii-BaseDetection/BEVDepth)
-* [DAIR-V2X](https://github.com/AIR-THU/DAIR-V2X)
-* [pypcd](https://github.com/dimatura/pypcd)
-
-# Citation
-If you use BEVHeight in your research, please cite our work by using the following BibTeX entry:
+```bash
+python exps/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py \
+    --ckpt_path ./checkpoints -e -b 1 --gpus 0
 ```
+
+Calibration on one frame (example):
+
+```bash
+# intrinsics (AnyCalib)
+python scripts/calibration/run_anycalib_single.py --model-id anycalib_pinhole --cam-id pinhole
+# extrinsic road-line refinement using those intrinsics
+python scripts/calibration/road_line_calibrate_single.py \
+    --pred-json outputs/calibration/anycalib_single/000000_anycalib_pinhole_pinhole.json
+```
+
+## Datasets
+
+DAIR-V2X-I (infrastructure side) is the main dataset, with the i-s1 subset used
+for the single-frame calibration tests. Raw infrastructure images live in
+`V2X-Raw-Datasets/` and are the likely input for the trajectory phase. Datasets
+are converted to KITTI format for the detector.
+
+---
+
+## Provenance and credit
+
+This repository is a fork/extension of **BEVHeight** (Yang et al., CVPR 2023).
+All detector architecture, configs, and pretrained weights originate from that
+work. Our additions are the Mac-CPU port, the calibration study
+(`scripts/calibration/`), and the planned trajectory + AV-identification stages.
+
+Built on: [BEVHeight](https://github.com/ADLab-AutoDrive/BEVHeight),
+[BEVDepth](https://github.com/Megvii-BaseDetection/BEVDepth),
+[DAIR-V2X](https://github.com/AIR-THU/DAIR-V2X),
+[AnyCalib](https://github.com/javrtg/AnyCalib), DeepCalib.
+
+```bibtex
 @inproceedings{yang2023bevheight,
     title={BEVHeight: A Robust Framework for Vision-based Roadside 3D Object Detection},
     author={Yang, Lei and Yu, Kaicheng and Tang, Tao and Li, Jun and Yuan, Kun and Wang, Li and Zhang, Xinyu and Chen, Peng},
@@ -259,3 +209,9 @@ If you use BEVHeight in your research, please cite our work by using the followi
     year={2023}
 }
 ```
+
+---
+
+*Note: the original detailed run summaries lived under `summary/`. If that folder
+is missing locally it may not have synced; the per-component logs in
+`personal-documents/` and `summary.md` cover the same material.*

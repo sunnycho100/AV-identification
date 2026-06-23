@@ -48,7 +48,6 @@ external/
 # Stray CI config (auto-generated, unrelated to this project)
 .github/java-upgrade/
 
-# Internal notes & shared artifacts
+# Internal notes & shared artifacts (summary/ folded into personal-documents/ on 2026-06-23)
 personal-documents/
-summary/
 toshare/

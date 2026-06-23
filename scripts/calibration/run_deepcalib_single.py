@@ -1,3 +1,33 @@
+# =============================================================================
+# NOTE / KNOWN LIMITATIONS OF DEEPCALIB FOR THIS PROJECT (DAIR-V2X-I roadside)
+# -----------------------------------------------------------------------------
+# Read this before trusting any output from this script again.
+#
+# 1) OUT-OF-DISTRIBUTION INPUT (main reason results were unreliable).
+#    DeepCalib was trained on wide-angle / distorted photos. Our roadside
+#    camera view is much narrower (normal-ish FOV). On sample 000000 the model
+#    "maxed out": focal_pred_299 = 501 (the top of its 40-500 range) and
+#    distortion = 0. That is a degenerate/saturated guess, not a real reading.
+#
+# 2) SINGLE FOCAL -> FAKE fx, fy (artifact of OUR conversion, not the camera).
+#    DeepCalib predicts only ONE focal number plus one distortion value.
+#    A pinhole needs two focals (fx, fy). In map_focal_to_intrinsics() below we
+#    synthesize them by scaling that single focal by DIFFERENT constants:
+#        fx = focal_299 * (image_width  / 299)
+#        fy = focal_299 * (image_height / 299)
+#    Because width != height (e.g. 1920 vs 1080), fx and fy come out unequal
+#    (e.g. 3217 vs 1809) even though a real square-pixel camera has fx ~= fy.
+#    The principal point is also FORCED to image center (cx=W/2, cy=H/2), not
+#    measured. So fx/fy/cx/cy from this script are an approximation, not truth.
+#
+# RECOMMENDATION IF REUSING DEEPCALIB:
+#    - Prefer AnyCalib (predicts the full intrinsics directly, fit our images
+#      much better), or just use the DAIR ground-truth intrinsics that ship
+#      with the dataset.
+#    - If you must use DeepCalib, do NOT treat the fx != fy split as real, and
+#      remember the focal can saturate on narrow-FOV roadside scenes.
+# =============================================================================
+
 import argparse
 import json
 from pathlib import Path
