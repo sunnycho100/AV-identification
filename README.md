@@ -34,6 +34,38 @@ our contribution.
 
 ---
 
+## Architecture
+
+![AV identification architecture](AV-identification-plan.png)
+
+The end-to-end system, read left to right:
+
+1. **Inputs.** A sequence of roadside camera frames, plus **camera parameters**
+   (intrinsics + extrinsics). Calibration sources: OpenTrafficCam3D, and our
+   learned-intrinsic study (**AnyCalib** / DeepCalib) for cameras with no
+   provided calibration.
+2. **Image encoder → detectors.** A shared image encoder feeds two heads:
+   - a **2D detector → classifier (YOLO)** that reads each vehicle's
+     **make & model** (fine-grained vehicle type).
+   - a **3D detector (BEVHeight)** that produces 3D boxes (position, size,
+     heading) for each vehicle.
+3. **3D object detection (BEVHeight).** The per-frame 3D boxes — the geometric
+   backbone of everything downstream.
+4. **Classic MOT (multi-object tracking).** A **MOT tracker** assigns a stable
+   ID to each vehicle across frames; a **3D trajectory generator** links the
+   per-frame 3D boxes into **3D trajectories** (x,y,z over time → motion).
+5. **BEV at timestep i.** A bird's-eye-view state per frame: each tracked vehicle
+   with its ID, type, 3D pose, and inter-vehicle **headway**.
+6. **AV identification.** From the stacked BEV/trajectory history, classify each
+   vehicle: *which model? is automated driving on?* — the research goal.
+
+Where we are on this diagram: the **calibration** inputs and the **3D detector
+(BEVHeight)** are done; the **MOT tracker + 3D trajectory generator** is the next
+build; the **2D make/model classifier** and the final **AV identification** stage
+are not started. This figure is the reference architecture for the whole project.
+
+---
+
 ## Status at a glance
 
 | Component | What it is | Status |
