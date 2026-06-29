@@ -127,10 +127,12 @@ subset. The planned 20-50 frame batch was never run before the phase was parked.
   then convert into pinhole intrinsics. See the limitations note at the top of
   that script (it gave a degenerate, saturated result on our roadside view).
 
-**Verdict: AnyCalib worked clearly better** for our images. DeepCalib was
-trained on wide-angle/distorted photos and is out-of-distribution for our
-narrower roadside view. DeepCalib's heavy weights were deleted in the June
-cleanup; only the one Single-Net regression weight is kept.
+**AnyCalib was selected as the intrinsic model.** It estimated the intrinsics
+substantially more accurately than DeepCalib, which was trained on
+wide-angle/distorted imagery and is out-of-distribution for the narrower roadside
+view (its focal estimate saturated at the limit of its output range). DeepCalib's
+larger weights were removed during the June cleanup; only the Single-Net
+regression weight is retained.
 
 **Extrinsic refinement (orientation only, translation fixed):**
 
@@ -141,19 +143,24 @@ cleanup; only the one Single-Net regression weight is kept.
   longitudinal (minimize |dY/dX|).
 
 `visualize_projection_compare.py` renders before/after overlays and IoU metrics.
-Result summaries were written under `summary/` (the originals; see note below).
+The road-line method was subsequently refined (orientation-based noise rejection
+and a data-driven vanishing-point estimator); see
+[`personal-documents/06272026-calibration-improvement.md`](personal-documents/06272026-calibration-improvement.md).
 
-**Why parked:** the advisor judged calibration an intermediate step and "good
-enough" on 2026-04-27, with the directive to build the full pipeline first and
-optimize later. Context:
+**Status rationale.** Calibration was assessed as an intermediate step and deemed
+sufficient for the current pipeline (advisor review, 2026-04-27), with the
+direction to prioritise building the end-to-end pipeline before further
+optimisation. On DAIR-V2X-I the dataset's ground-truth calibration is used
+directly; AnyCalib is retained as the fallback for cameras that ship without
+calibration. Context:
 [`personal-documents/632206-trajectory-pipeline-todo.md`](personal-documents/632206-trajectory-pipeline-todo.md).
 
 ### 3. 3D boxing (done, = BEVHeight output)
 
-"Boxing" is just the per-frame 3D bounding boxes the detector produces (class,
-3D size, location, orientation). This is BEVHeight's native output and already
-works through the CPU inference path above. No separate code of ours yet; the
-next phase consumes these boxes.
+The per-frame 3D bounding boxes produced by the detector (class, 3D size,
+location, orientation). These are BEVHeight's native output and are already
+available through the CPU inference path above; no additional code is required at
+this stage. The subsequent phase consumes these boxes.
 
 ### 4. Trajectory extraction (not started)
 
@@ -164,10 +171,10 @@ acceleration** over time. Primary reference for the broader task is below.
 
 ### 5. AV identification (not started)
 
-The actual research question: from each trajectory, decide AV vs human. Needs a
-feature definition (smoothness, jerk, lane-keeping, reaction) and a first
-classifier, plus a source of AV-vs-human ground truth. To be scoped with the
-advisor.
+The core research question: classify each trajectory as autonomous or
+human-driven. This requires a behavioural feature definition (smoothness, jerk,
+lane-keeping, reaction timing), an initial classifier, and a source of
+AV-vs-human ground truth. To be scoped with the advisor.
 
 Primary reference: **Maresca et al., "Are you a robot? Detecting Autonomous
 Vehicles from Behavior Analysis" (arXiv:2403.09571, 2024)** — same task, but
