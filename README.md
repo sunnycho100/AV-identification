@@ -60,9 +60,11 @@ The end-to-end system, read left to right:
    vehicle: *which model? is automated driving on?* — the research goal.
 
 Where we are on this diagram: the **calibration** inputs and the **3D detector
-(BEVHeight)** are done; the **MOT tracker + 3D trajectory generator** is the next
-build; the **2D make/model classifier** and the final **AV identification** stage
-are not started. This figure is the reference architecture for the whole project.
+(BEVHeight)** are done; the **MOT tracker + 3D trajectory generator** has a **first
+working version** (AB3DMOT wired to BEVHeight, trajectories drawn) but is limited by
+non-sequential data; the **2D make/model classifier** and the final **AV
+identification** stage are not started. This figure is the reference architecture
+for the whole project.
 
 ---
 
@@ -73,7 +75,7 @@ are not started. This figure is the reference architecture for the whole project
 | 1. Base detector (BEVHeight) | Vision-based roadside 3D object detection | **Done** (runs on Mac CPU) |
 | 2. Camera calibration | Intrinsic + extrinsic estimation/refinement | **Done, parked** (advisor: good enough, 2026-04-27) |
 | 3. 3D boxing | Per-frame 3D bounding boxes from images | **Done** (inference works; it is BEVHeight's output) |
-| 4. Trajectory extraction | Boxes across frames -> tracks + velocity/accel | **Not started** (planned) |
+| 4. Trajectory extraction (MOT) | Boxes across frames -> tracks + velocity/accel | **First version** (AB3DMOT wired + trajectories visualized; needs sequential data) |
 | 5. AV identification | Classify each track as AV vs human | **Not started** (the actual research question) |
 
 ---
@@ -162,12 +164,34 @@ location, orientation). These are BEVHeight's native output and are already
 available through the CPU inference path above; no additional code is required at
 this stage. The subsequent phase consumes these boxes.
 
-### 4. Trajectory extraction (not started)
+### 4. Trajectory extraction / MOT (first version)
 
-Planned approach (simplest first): take the **centers of the 3D boxes**,
-associate them across frames into per-vehicle tracks (start with
-nearest-center / IoU matching), and compute **2D/3D position, velocity, and
-acceleration** over time. Primary reference for the broader task is below.
+Turns BEVHeight's per-frame 3D boxes (no identity) into **identity-linked
+trajectories** (same car → same ID across frames + velocity). Code in
+[`scripts/tracking/`](scripts/tracking/); detailed write-up in
+[`personal-documents/pipeline/6-29-2026-mot-tracking.md`](personal-documents/pipeline/6-29-2026-mot-tracking.md).
+
+**Tracker:** **AB3DMOT** (Weng et al., IROS 2020) — 3D Kalman filter + Hungarian
+matching on box centres. Chosen because it is paper-backed, takes generic 3D boxes
+(no image), and fits a fixed roadside camera (ego-motion compensation off). The
+tracker associates purely by geometry — it never sees the image — so velocity comes
+free from the Kalman state, but two nearby cars can cause an **ID switch**.
+`run_ab3dmot.py` uses only AB3DMOT's tracker core (+ small stubs in
+`scripts/tracking/xinshuo_stubs/`); the rest of AB3DMOT's framework is bypassed.
+
+**Visualization (three views, in `outputs/tracking/`):**
+- `plot_trajectories.py` → top-down BEV path plot per vehicle.
+- `overlay_trajectories.py` → each vehicle's trail drawn on the camera image.
+- `highlight_vehicle.py` → side-by-side start→end frames for one vehicle, with its
+  real BEVHeight box drawn in each (anchored on frames that have an actual
+  detection, not Kalman-coasted ones).
+
+**Limitation (important):** DAIR-V2X-I frames are **sampled, not video** (no
+timestamps; adjacent frames are seconds apart), so full continuous trajectories and
+trustworthy absolute speeds are not yet possible — work is done in short in-order
+segments. A genuinely sequential dataset (**V2X-Seq / SPD**, AIR-THU) is the
+prerequisite; the scripts run on it unmodified. Next build is **motion-feature
+extraction** (velocity → acceleration → jerk → lane-keeping) feeding the classifier.
 
 ### 5. AV identification (not started)
 
@@ -190,11 +214,16 @@ models/, layers/, ops/        BEVHeight detector (backbone, BEV head, voxel pool
 exps/dair-v2x/, exps/rope3d/  experiment configs (dair-v2x R50_102 is the CPU-patched one)
 evaluators/                   KITTI-format evaluation
 scripts/calibration/          OUR calibration work (AnyCalib, DeepCalib, road refinement)
+scripts/object_detection/     OUR BEVHeight inference drivers (single + batch frames)
+scripts/tracking/             OUR MOT work (AB3DMOT driver + trajectory visualizers)
 scripts/data_converter/       DAIR/Rope3D -> KITTI conversion
 external/                     AnyCalib + DeepCalib clones
+AB3DMOT/                      AB3DMOT tracker (upstream; only its core is used)
 data/                         DAIR-V2X-I (+ subsets), v2x-c, v2x-v
-V2X-Raw-Datasets/             raw infrastructure images (substrate for trajectory phase)
+V2X-Raw-Datasets/             raw infrastructure images (sampled, not video — see tracking notes)
 outputs/calibration/          calibration run artifacts (currently sample 000000 only)
+outputs/object_detection/     BEVHeight 3D-box predictions + annotated frames
+outputs/tracking/             trajectories (tracks.json) + BEV/overlay/highlight images
 personal-documents/           dated working logs and plans (internal)
 summary.md                    detailed BEVHeight architecture/summary
 ```
@@ -218,12 +247,34 @@ python scripts/calibration/road_line_calibrate_single.py \
     --pred-json outputs/calibration/anycalib_single/000000_anycalib_pinhole_pinhole.json
 ```
 
+BEVHeight batch detection + MOT trajectories (miniforge Python 3.12; AB3DMOT needs
+`NUMBA_DISABLE_JIT=1` for numba 0.64 compatibility):
+
+```bash
+# 3D detection over a frame range -> outputs/object_detection/our_intrinsics/
+python scripts/object_detection/run_bevheight_multiple.py --start 0 --end 5
+
+# track one in-order segment -> outputs/tracking/our_intrinsics/seg_00_05/tracks.json
+NUMBA_DISABLE_JIT=1 python scripts/tracking/run_ab3dmot.py --start 0 --end 5 --label seg_00_05
+
+# visualize: top-down plot, image overlay, side-by-side highlight
+python scripts/tracking/plot_trajectories.py    --label seg_00_05
+python scripts/tracking/overlay_trajectories.py --label seg_00_05
+python scripts/tracking/highlight_vehicle.py    --label seg_00_05            # auto-picks candidates
+```
+
 ## Datasets
 
 DAIR-V2X-I (infrastructure side) is the main dataset, with the i-s1 subset used
 for the single-frame calibration tests. Raw infrastructure images live in
-`V2X-Raw-Datasets/` and are the likely input for the trajectory phase. Datasets
-are converted to KITTI format for the detector.
+`V2X-Raw-Datasets/`. Datasets are converted to KITTI format for the detector.
+
+**Note for the trajectory phase:** DAIR-V2X-I is a single-frame *detection*
+benchmark — its frames are **sampled, not a continuous video** (no timestamps;
+adjacent indices are seconds apart). It works for detection and short in-order MOT
+demos, but proper multi-object tracking needs a **sequential** dataset. The target
+is **V2X-Seq / SPD** (AIR-THU) — continuous frames with timestamps and ground-truth
+tracking IDs — a separate download.
 
 ---
 
@@ -232,11 +283,15 @@ are converted to KITTI format for the detector.
 This repository is a fork/extension of **BEVHeight** (Yang et al., CVPR 2023).
 All detector architecture, configs, and pretrained weights originate from that
 work. Our additions are the Mac-CPU port, the calibration study
-(`scripts/calibration/`), and the planned trajectory + AV-identification stages.
+(`scripts/calibration/`), the BEVHeight inference drivers
+(`scripts/object_detection/`), the MOT integration + trajectory visualizers
+(`scripts/tracking/`), and the planned AV-identification stage. The tracker is
+**AB3DMOT** (Weng et al., IROS 2020), used as a vendored dependency (core only).
 
 Built on: [BEVHeight](https://github.com/ADLab-AutoDrive/BEVHeight),
 [BEVDepth](https://github.com/Megvii-BaseDetection/BEVDepth),
 [DAIR-V2X](https://github.com/AIR-THU/DAIR-V2X),
+[AB3DMOT](https://github.com/xinshuoweng/AB3DMOT),
 [AnyCalib](https://github.com/javrtg/AnyCalib), DeepCalib.
 
 ```bibtex

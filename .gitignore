@@ -43,8 +43,9 @@ data/v2x-*-split*.json
 outputs/
 *.log
 
-# External research repos
+# External research repos (cloned separately, not committed)
 external/
+AB3DMOT/
 
 # Stray CI config (auto-generated, unrelated to this project)
 .github/java-upgrade/
