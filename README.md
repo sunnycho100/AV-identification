@@ -2,7 +2,7 @@
 
 Internal lab project (CATS-Lab). This repo started as a fork of **BEVHeight**
 (CVPR 2023) and is being extended toward a different research goal. The original
-upstream README is preserved in [`prev-readme.md`](prev-readme.md).
+upstream README is preserved in [`docs/prev-readme.md`](docs/prev-readme.md).
 
 > This README is an internal progress document. It tracks what each component
 > does, what is finished, what is parked, and what is next. It is meant for the
@@ -36,7 +36,7 @@ our contribution.
 
 ## Architecture
 
-![AV identification architecture](AV-identification-plan.png)
+![AV identification architecture](docs/assets/AV-identification-plan.png)
 
 The end-to-end system, read left to right:
 
@@ -73,10 +73,23 @@ for the whole project.
 | Component | What it is | Status |
 |---|---|---|
 | 1. Base detector (BEVHeight) | Vision-based roadside 3D object detection | **Done** (runs on Mac CPU) |
-| 2. Camera calibration | Intrinsic + extrinsic estimation/refinement | **Done, parked** (advisor: good enough, 2026-04-27) |
+| 2. Camera calibration | Intrinsic + extrinsic estimation/refinement | **Done incl. new WI camera data** — self-calibration (AnyCalib + VP + lane-width anchor) validated at 0.62 m RMSE vs GPS (2026-07-15) |
 | 3. 3D boxing | Per-frame 3D bounding boxes from images | **Done** (inference works; it is BEVHeight's output) |
-| 4. Trajectory extraction (MOT) | Boxes across frames -> tracks + velocity/accel | **First version** (AB3DMOT wired + trajectories visualized; needs sequential data) |
+| 4. Trajectory extraction (MOT) | Boxes across frames -> tracks + velocity/accel | **Working on real 30 Hz video** (Camera data clip tracked end-to-end, graded vs GPS) |
 | 5. AV identification | Classify each track as AV vs human | **Not started** (the actual research question) |
+
+![Camera track vs GPS — 0.62 m RMSE, self-calibrated](personal-documents/calibration/images/7-15-gps_vs_track.png)
+
+*Validation on WI DOT camera data (2026-07-15): trajectory from our fully
+self-calibrated camera pipeline (AnyCalib + vanishing point + lane-width
+anchor — no GT, no GPS input) vs the instrumented vehicle's GPS.*
+
+**New (2026-07-15):** full camera-data pipeline documentation —
+[Ultimate pipeline summary](personal-documents/7-15-2026-ultimate-pipeline-summary.md)
+(master component table + results + rationale) and the
+[step-by-step runbook](personal-documents/7-15-2026-runbook.md)
+(every command to reproduce the pipeline on a new clip). Run log with attempt
+history: [overnight loop](personal-documents/calibration/7-15-2026-overnight-loop.md).
 
 ---
 
@@ -97,7 +110,7 @@ evaluation/inference path to run on a Mac with no CUDA:
 - Removed/guarded hardcoded `.cuda()` calls (`layers/backbones/lss_fpn.py`,
   `layers/heads/bev_height_head.py`).
 - Switched the PyTorch Lightning trainer to single-device CPU in the experiment
-  configs (`exps/dair-v2x/...`).
+  configs (`experiments/dair-v2x/...`).
 
 Inference runs and produces KITTI-format metrics. Details:
 [`personal-documents/3-18-2026.md`](personal-documents/3-18-2026.md) and
@@ -124,17 +137,12 @@ subset. The planned 20-50 frame batch was never run before the phase was parked.
   Predicts a per-pixel ray field and recovers the full intrinsics in closed
   form. Input: one RGB image + a camera-model id (`pinhole`). Output:
   [fx, fy, cx, cy]. Variants run: `anycalib_pinhole`, `anycalib_gen`.
-- **DeepCalib** (2018), `run_deepcalib_single.py`. Older InceptionV3 net.
+- **DeepCalib** (2018), **archived** under [`archive/DeepCalib/`](archive/DeepCalib/)
+  (runner: `archive/DeepCalib/run_deepcalib_single.py`). Older InceptionV3 net.
   Predicts a single focal + one distortion value from a 299x299 image, which we
-  then convert into pinhole intrinsics. See the limitations note at the top of
-  that script (it gave a degenerate, saturated result on our roadside view).
-
-**AnyCalib was selected as the intrinsic model.** It estimated the intrinsics
-substantially more accurately than DeepCalib, which was trained on
-wide-angle/distorted imagery and is out-of-distribution for the narrower roadside
-view (its focal estimate saturated at the limit of its output range). DeepCalib's
-larger weights were removed during the June cleanup; only the Single-Net
-regression weight is retained.
+  then convert into pinhole intrinsics. See `ARCHIVE.md` and the limitations
+  banner in that script (degenerate/saturated on our roadside view). Not used
+  for new runs — AnyCalib is the active intrinsic model.
 
 **Extrinsic refinement (orientation only, translation fixed):**
 
@@ -211,21 +219,22 @@ simulation-only (CARLA). Full review:
 
 ```
 models/, layers/, ops/        BEVHeight detector (backbone, BEV head, voxel pooling)
-exps/dair-v2x/, exps/rope3d/  experiment configs (dair-v2x R50_102 is the CPU-patched one)
+experiments/dair-v2x/, ...    experiment configs (dair-v2x R50_102 is the CPU-patched one)
 evaluators/                   KITTI-format evaluation
-scripts/calibration/          OUR calibration work (AnyCalib, DeepCalib, road refinement)
+scripts/calibration/          OUR calibration work (AnyCalib + road refinement)
 scripts/object_detection/     OUR BEVHeight inference drivers (single + batch frames)
 scripts/tracking/             OUR MOT work (AB3DMOT driver + trajectory visualizers)
 scripts/data_converter/       DAIR/Rope3D -> KITTI conversion
-external/                     AnyCalib + DeepCalib clones
-AB3DMOT/                      AB3DMOT tracker (upstream; only its core is used)
+third_party/                  AnyCalib + AB3DMOT clones (active vendored deps)
+archive/                      unused tools kept for history (DeepCalib + runner)
 data/                         DAIR-V2X-I (+ subsets), v2x-c, v2x-v
 V2X-Raw-Datasets/             raw infrastructure images (sampled, not video — see tracking notes)
 outputs/calibration/          calibration run artifacts (currently sample 000000 only)
 outputs/object_detection/     BEVHeight 3D-box predictions + annotated frames
 outputs/tracking/             trajectories (tracks.json) + BEV/overlay/highlight images
+outputs/gallery/              curated visuals for professor/paper eyeballing
+docs/                         install notes, upstream prev-readme, paper PDF, summary
 personal-documents/           dated working logs and plans (internal)
-summary.md                    detailed BEVHeight architecture/summary
 ```
 
 ## Running what works today
@@ -233,7 +242,7 @@ summary.md                    detailed BEVHeight architecture/summary
 BEVHeight CPU evaluation (DAIR-V2X-I, R50 102 config):
 
 ```bash
-python exps/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py \
+python experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py \
     --ckpt_path ./checkpoints -e -b 1 --gpus 0
 ```
 
@@ -292,7 +301,7 @@ Built on: [BEVHeight](https://github.com/ADLab-AutoDrive/BEVHeight),
 [BEVDepth](https://github.com/Megvii-BaseDetection/BEVDepth),
 [DAIR-V2X](https://github.com/AIR-THU/DAIR-V2X),
 [AB3DMOT](https://github.com/xinshuoweng/AB3DMOT),
-[AnyCalib](https://github.com/javrtg/AnyCalib), DeepCalib.
+[AnyCalib](https://github.com/javrtg/AnyCalib), DeepCalib (archived).
 
 ```bibtex
 @inproceedings{yang2023bevheight,
@@ -308,4 +317,4 @@ Built on: [BEVHeight](https://github.com/ADLab-AutoDrive/BEVHeight),
 
 *Note: the original detailed run summaries lived under `summary/`. If that folder
 is missing locally it may not have synced; the per-component logs in
-`personal-documents/` and `summary.md` cover the same material.*
+`personal-documents/` and [`docs/summary.md`](docs/summary.md) cover the same material.*

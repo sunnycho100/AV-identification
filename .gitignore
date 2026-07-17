@@ -39,13 +39,22 @@ data/dair-v2x-*
 data/v2x-*-split*.json
 *.pkl
 
+# Delivered datasets — kept local, never committed.
+# Camera data/: WI-DOT Beltline clips + the per-clip GPS trajectory CSVs that are
+# held-out evaluation ground truth (see CLAUDE.md). AV-HV trajectory data/: OpenACC
+# (JRC) car-following CSVs. data/camera-data/: frames re-derivable from the clips
+# via ffmpeg, so there is nothing to gain by versioning them.
+Camera data/
+AV-HV trajectory data/
+data/camera-data/
+
 # Outputs & logs
 outputs/
 *.log
 
-# External research repos (cloned separately, not committed)
-external/
-AB3DMOT/
+# Vendored / archived research clones (not committed)
+third_party/
+archive/
 
 # Stray CI config (auto-generated, unrelated to this project)
 .github/java-upgrade/
@@ -53,6 +62,9 @@ AB3DMOT/
 # Internal notes & shared artifacts (summary/ folded into personal-documents/ on 2026-06-23)
 personal-documents/
 toshare/
+
+# Local agent instructions
+CLAUDE.md
 
 # Reference papers (PDFs kept locally, not committed)
 *.pdf

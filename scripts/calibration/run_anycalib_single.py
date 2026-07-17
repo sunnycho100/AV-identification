@@ -123,35 +123,50 @@ def validity_checks(pred_intrinsics, gt_intrinsics, cam_id):
 
 
 def main():
-    parser = argparse.ArgumentParser("Run AnyCalib on one DAIR-V2X-I frame and validate outputs")
+    parser = argparse.ArgumentParser("Run AnyCalib on one image; validate vs DAIR GT when available")
     parser.add_argument("--sample-id", default="000000")
     parser.add_argument("--data-root", default="data/dair-v2x-i")
+    parser.add_argument("--image", default=None,
+                        help="explicit image path (no-GT mode: skips DAIR calib files entirely)")
     parser.add_argument("--model-id", default="anycalib_pinhole")
     parser.add_argument("--cam-id", default="pinhole")
     parser.add_argument("--out-dir", default="outputs/calibration/anycalib_single")
     args = parser.parse_args()
 
-    root = Path(args.data_root)
-    image_path = root / "image" / f"{args.sample_id}.jpg"
-    intrinsic_path = root / "calib" / "camera_intrinsic" / f"{args.sample_id}.json"
-    extrinsic_path = root / "calib" / "virtuallidar_to_camera" / f"{args.sample_id}.json"
+    if args.image:
+        image_path = Path(args.image)
+        sample_id = image_path.stem
+        gt_intrinsics = None
+        gt_extrinsics = None
+    else:
+        root = Path(args.data_root)
+        sample_id = args.sample_id
+        image_path = root / "image" / f"{sample_id}.jpg"
+        intrinsic_path = root / "calib" / "camera_intrinsic" / f"{sample_id}.json"
+        extrinsic_path = root / "calib" / "virtuallidar_to_camera" / f"{sample_id}.json"
+        if not intrinsic_path.exists():
+            raise FileNotFoundError(f"Intrinsic file not found: {intrinsic_path}")
+        if not extrinsic_path.exists():
+            raise FileNotFoundError(f"Extrinsic file not found: {extrinsic_path}")
+        gt_intrinsics = load_gt_intrinsics(intrinsic_path)
+        gt_extrinsics = load_gt_extrinsics(extrinsic_path)
 
     if not image_path.exists():
         raise FileNotFoundError(f"Image not found: {image_path}")
-    if not intrinsic_path.exists():
-        raise FileNotFoundError(f"Intrinsic file not found: {intrinsic_path}")
-    if not extrinsic_path.exists():
-        raise FileNotFoundError(f"Extrinsic file not found: {extrinsic_path}")
-
-    gt_intrinsics = load_gt_intrinsics(intrinsic_path)
-    gt_extrinsics = load_gt_extrinsics(extrinsic_path)
 
     pred = run_inference(image_path, args.model_id, args.cam_id)
-    checks = validity_checks(pred["intrinsics"], gt_intrinsics, args.cam_id)
+    if gt_intrinsics is None:
+        with Image.open(image_path) as im:
+            w, h = im.size
+        no_gt = {"fx": 0.0, "fy": 0.0, "cx": 0.0, "cy": 0.0, "width": w, "height": h}
+        checks = [c for c in validity_checks(pred["intrinsics"], no_gt, args.cam_id)
+                  if c["name"] != "gt_alignment_summary"]
+    else:
+        checks = validity_checks(pred["intrinsics"], gt_intrinsics, args.cam_id)
     all_passed = all(item["passed"] for item in checks)
 
     result = {
-        "sample_id": args.sample_id,
+        "sample_id": sample_id,
         "image_path": str(image_path),
         "model_id": args.model_id,
         "cam_id": args.cam_id,
@@ -162,7 +177,7 @@ def main():
             "rays_shape": pred["rays_shape"],
             "pred_size": pred["pred_size"],
         },
-        "ground_truth": {
+        "ground_truth": None if gt_intrinsics is None else {
             "intrinsics": gt_intrinsics,
             "extrinsics": gt_extrinsics,
         },
@@ -172,7 +187,7 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{args.sample_id}_{args.model_id}_{args.cam_id}.json"
+    out_path = out_dir / f"{sample_id}_{args.model_id}_{args.cam_id}.json"
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(result, f, indent=2)
 

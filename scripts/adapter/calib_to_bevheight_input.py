@@ -128,6 +128,17 @@ def load_K_from_anycalib(path):
     return np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
 
 
+def load_extrinsic_json(path):
+    """Generic pose loader: one JSON with {"rotation": 3x3, "translation": [3]}
+    (ground-frame -> camera, same schema as DAIR's virtuallidar_to_camera).
+    This is the non-DAIR path for new datasets."""
+    data = json.loads(Path(path).read_text())
+    ext = np.eye(4)
+    ext[:3, :3] = np.asarray(data["rotation"], dtype=np.float64)
+    ext[:3, 3] = np.asarray(data["translation"], dtype=np.float64).reshape(3)
+    return ext
+
+
 def load_extrinsic(rotation_json, translation_json):
     """rotation from our road-line result (refined), translation from GT."""
     rot = np.asarray(json.loads(Path(rotation_json).read_text())["refined"]["rotation"], dtype=np.float64)

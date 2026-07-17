@@ -20,7 +20,7 @@ from types import SimpleNamespace
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-AB3DMOT_DIR = ROOT / "AB3DMOT"
+AB3DMOT_DIR = ROOT / "third_party" / "AB3DMOT"
 STUBS_DIR = Path(__file__).resolve().parent / "xinshuo_stubs"
 
 # stubs first so AB3DMOT_libs imports resolve without the real Xinshuo_PyToolbox
@@ -31,7 +31,7 @@ from AB3DMOT_libs.model import AB3DMOT  # noqa: E402
 
 # --- what to track ---
 TAG = "our_intrinsics"
-FRAME_RATE_HZ = 12.0  # DAIR-V2X-I 12 Hz; per-frame velocity * this = m/s
+DEFAULT_FPS = 12.0  # DAIR-V2X-I 12 Hz; new datasets pass --fps (Camera data clips are 30)
 TRACK_CLASS = "car"   # v0: vehicles only (the AV-vs-human question)
 DET_DIR = ROOT / "outputs/object_detection" / TAG
 OUT_DIR = ROOT / "outputs/tracking" / TAG
@@ -49,9 +49,10 @@ def build_cfg():
     )
 
 
-def load_frame_dets(frame_id):
+def load_frame_dets(frame_id, path=None):
     """Return (dets Nx7 [h,w,l,x,y,z,theta], info Nx1 [score]) for one frame, cars only."""
-    path = DET_DIR / f"{frame_id:06d}_pred.json"
+    if path is None:
+        path = DET_DIR / f"{frame_id:06d}_pred.json"
     objs = json.loads(path.read_text())
     dets, info = [], []
     for o in objs:
@@ -70,12 +71,28 @@ def main():
     ap.add_argument("--end", type=int, default=None, help="last frame index (inclusive)")
     ap.add_argument("--label", default=None,
                     help="output subfolder under outputs/tracking/<tag>/ (keeps segments separate)")
+    ap.add_argument("--fps", type=float, default=DEFAULT_FPS,
+                    help=f"video frame rate in Hz for velocity scaling (default {DEFAULT_FPS})")
+    ap.add_argument("--det-dir", default=None,
+                    help="detections dir (default: outputs/object_detection/<TAG>)")
+    ap.add_argument("--out-dir", default=None,
+                    help="output dir (default: outputs/tracking/<TAG>)")
+    ap.add_argument("--max-age", type=int, default=None,
+                    help="frames a track survives without a match (preset 2 was "
+                         "tuned for 10 Hz; try ~6 at 30 Hz)")
     args = ap.parse_args()
+    frame_rate_hz = args.fps
+    global DET_DIR, OUT_DIR
+    if args.det_dir:
+        DET_DIR = Path(args.det_dir)
+    if args.out_dir:
+        OUT_DIR = Path(args.out_dir)
 
     frame_files = sorted(DET_DIR.glob("*_pred.json"))
     if not frame_files:
         sys.exit(f"No detections in {DET_DIR}")
     frame_ids = [int(f.stem.split("_")[0]) for f in frame_files]
+    frame_paths = dict(zip(frame_ids, frame_files))
     if args.start is not None:
         frame_ids = [f for f in frame_ids if f >= args.start]
     if args.end is not None:
@@ -88,11 +105,13 @@ def main():
           f"({frame_ids[0]:06d}..{frame_ids[-1]:06d}) from {DET_DIR}")
 
     tracker = AB3DMOT(build_cfg(), cat="Car", ID_init=0)
+    if args.max_age is not None:
+        tracker.max_age = args.max_age
 
     # trajectories[id] = list of per-frame states
     trajectories = {}
     for frame in frame_ids:
-        dets, info = load_frame_dets(frame)
+        dets, info = load_frame_dets(frame, frame_paths.get(frame))
         results, _ = tracker.track({"dets": dets, "info": info}, frame, TAG)
         arr = results[0]  # rows: [h,w,l,x,y,z,theta, ID, score]
 
@@ -108,16 +127,16 @@ def main():
                 "frame": frame,
                 "x": x, "y": y, "z": z,
                 "yaw": float(row[6]),
-                # velocity is meters-per-frame in the Kalman state; *FRAME_RATE_HZ for m/s
+                # velocity is meters-per-frame in the Kalman state; *frame_rate_hz for m/s
                 "vx": float(vx), "vy": float(vy), "vz": float(vz),
-                "speed_mps": float(math.hypot(vx, vy) * FRAME_RATE_HZ),
+                "speed_mps": float(math.hypot(vx, vy) * frame_rate_hz),
                 "score": score,
             })
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "tracks.json"
     out_path.write_text(json.dumps({
-        "meta": {"tag": TAG, "frame_rate_hz": FRAME_RATE_HZ, "class": TRACK_CLASS,
+        "meta": {"tag": TAG, "frame_rate_hz": frame_rate_hz, "class": TRACK_CLASS,
                  "frames": [frame_ids[0], frame_ids[-1]], "num_tracks": len(trajectories)},
         "tracks": trajectories,
     }, indent=2))

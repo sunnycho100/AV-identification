@@ -117,7 +117,7 @@ python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
     </tr>
     <tr align=center>
         <td rowspan="4">BEVHeight</td> 
-         <td><a href=exps/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py>R50_102</td>
+         <td><a href=experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py>R50_102</td>
         <td>[0, 102.4]</td> 
         <td>77.48</td>
         <td>65.46</td>
@@ -131,7 +131,7 @@ python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
         <td><a href="https://cloud.tsinghua.edu.cn/f/6998b0b000aa45a0861e/?dl=1">model</a></td>
     </tr>
     <tr align=center>
-        <td><a href=exps/dair-v2x/bev_height_lss_r50_864_1536_128x128_140.py>R50_140</td>
+        <td><a href=experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_140.py>R50_140</td>
         <td>[0, 140.8]</td> 
         <td>80.80</td>
         <td>75.23</td>
@@ -145,7 +145,7 @@ python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
         <td><a href="https://cloud.tsinghua.edu.cn/f/4fa0578a8c7347ebb353/?dl=1">model</a></td>
     </tr>
     <tr align=center>
-        <td><a href=exps/dair-v2x/bev_height_lss_r101_864_1536_256x256_102.py>R101_102</td>
+        <td><a href=experiments/dair-v2x/bev_height_lss_r101_864_1536_256x256_102.py>R101_102</td>
         <td>[0, 102.4]</td> 
         <td>78.06</td>
         <td>65.94</td>
@@ -159,7 +159,7 @@ python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
         <td><a href="https://cloud.tsinghua.edu.cn/f/acd81d6083b742ddbb64/?dl=1">model</a></td>
     </tr>
     <tr align=center>
-        <td><a href=exps/dair-v2x/bev_height_lss_r101_864_1536_256x256_140.py>R101_140</td>
+        <td><a href=experiments/dair-v2x/bev_height_lss_r101_864_1536_256x256_140.py>R101_140</td>
         <td>[0, 140.8]</td> 
         <td>81.80</td>
         <td>76.19</td>
@@ -206,7 +206,7 @@ python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
     </tr>
     <tr align=center>
         <td rowspan="4">BEVHeight</td> 
-         <td><a href=exps/rope3d/bev_height_lss_r50_864_1536_128x128_102.py>R50_102</td>
+         <td><a href=experiments/rope3d/bev_height_lss_r50_864_1536_128x128_102.py>R50_102</td>
         <td>[0, 102.4]</td> 
         <td>83.49</td>
         <td>72.46</td>
@@ -223,7 +223,7 @@ python [EXP_PATH] --ckpt_path [CKPT_PATH] -e -b 8 --gpus 8
         <td><a href="https://cloud.tsinghua.edu.cn/f/fa3e2d07d62a44b7a337/?dl=1">model</a></td>
     </tr>
     <tr align=center>
-        <td><a href=exps/rope3d/bev_height_lss_r50_864_1536_128x128_140.py>R50_140</td>
+        <td><a href=experiments/rope3d/bev_height_lss_r50_864_1536_128x128_140.py>R50_140</td>
         <td>[0, 140.8]</td> 
         <td>85.46</td>
         <td>79.15</td>

@@ -19,7 +19,7 @@ from scripts.adapter.calib_to_bevheight_input import build_mats_dict, load_K_fro
 from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 
 # --- exp configs (import module with hyphenated path via importlib) ---
-_exp_path = ROOT / "exps/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py"
+_exp_path = ROOT / "experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py"
 _spec = importlib.util.spec_from_file_location("bev_exp", _exp_path)
 bev_exp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bev_exp)

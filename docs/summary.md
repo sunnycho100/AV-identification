@@ -19,7 +19,7 @@ BEVHeights-mac/
 ├── ops/                     # Custom CUDA voxel pooling kernel
 ├── dataset/                 # Multi-view detection dataset loader
 ├── evaluators/              # KITTI-format evaluation pipeline
-├── exps/
+├── experiments/
 │   ├── dair-v2x/            # Experiment configs for DAIR-V2X dataset
 │   └── rope3d/              # Experiment configs for ROPE3D dataset
 ├── scripts/                 # Data conversion (DAIR-V2X/ROPE3D → KITTI format)
@@ -78,7 +78,7 @@ Both datasets are converted to KITTI format for training and evaluation.
 
 **Training:**
 ```bash
-python exps/dair-v2x/bev_height_lss_r101_864_1536_256x256_140.py \
+python experiments/dair-v2x/bev_height_lss_r101_864_1536_256x256_140.py \
     --amp_backend native -b 2 --gpus 8
 ```
 
