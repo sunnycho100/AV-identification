@@ -1,36 +1,14 @@
 # AV Identification from Roadside 3D Detection
 
-Internal lab project (CATS-Lab). This repo started as a fork of **BEVHeight**
-(CVPR 2023) and is being extended toward a different research goal. The original
-upstream README is preserved in [`docs/prev-readme.md`](docs/prev-readme.md).
+Detecting whether a vehicle is driven autonomously or by a human, using only
+video from fixed roadside infrastructure cameras. The system extracts 3D
+vehicle trajectories from monocular roadside footage and will classify each
+trajectory from its motion characteristics. The closest prior work (Maresca et
+al., arXiv:2403.09571) addresses this task in simulation only; this project
+targets the real-world setting.
 
-> This README is an internal progress document. It tracks what each component
-> does, what is finished, what is parked, and what is next. It is meant for the
-> author, advisor, and labmates, not as a public release doc.
-
----
-
-## Ultimate goal
-
-Take video from a fixed roadside (infrastructure) camera and decide, for each
-vehicle in view, whether it is an **autonomous vehicle (AV)** or a
-**human-driven** one, purely from how it moves.
-
-The full intended chain:
-
-```
-roadside video
-  -> per-frame 3D bounding boxes        (BEVHeight detector)
-  -> camera calibration                 (intrinsic + extrinsic, so boxes sit correctly in the world)
-  -> trajectories                       (associate boxes across frames; position, velocity, acceleration)
-  -> AV vs human classification         (behavior analysis on the trajectories)
-```
-
-The research bet: AV motion (smoothness, jerk, lane-keeping, reaction timing)
-differs measurably from human driving, and that difference is detectable from
-external roadside observation in the real world. The closest prior work
-(Maresca et al., 2024) does this in simulation only, so the real-world gap is
-our contribution.
+This repository extends **BEVHeight** (Yang et al., CVPR 2023). The upstream
+README is preserved at [`docs/prev-readme.md`](docs/prev-readme.md).
 
 ---
 
@@ -38,283 +16,179 @@ our contribution.
 
 ![AV identification architecture](docs/assets/AV-identification-plan.png)
 
-The end-to-end system, read left to right:
-
-1. **Inputs.** A sequence of roadside camera frames, plus **camera parameters**
-   (intrinsics + extrinsics). Calibration sources: OpenTrafficCam3D, and our
-   learned-intrinsic study (**AnyCalib** / DeepCalib) for cameras with no
-   provided calibration.
-2. **Image encoder → detectors.** A shared image encoder feeds two heads:
-   - a **2D detector → classifier (YOLO)** that reads each vehicle's
-     **make & model** (fine-grained vehicle type).
-   - a **3D detector (BEVHeight)** that produces 3D boxes (position, size,
-     heading) for each vehicle.
-3. **3D object detection (BEVHeight).** The per-frame 3D boxes — the geometric
-   backbone of everything downstream.
-4. **Classic MOT (multi-object tracking).** A **MOT tracker** assigns a stable
-   ID to each vehicle across frames; a **3D trajectory generator** links the
-   per-frame 3D boxes into **3D trajectories** (x,y,z over time → motion).
-5. **BEV at timestep i.** A bird's-eye-view state per frame: each tracked vehicle
-   with its ID, type, 3D pose, and inter-vehicle **headway**.
-6. **AV identification.** From the stacked BEV/trajectory history, classify each
-   vehicle: *which model? is automated driving on?* — the research goal.
-
-Where we are on this diagram: the **calibration** inputs and the **3D detector
-(BEVHeight)** are done; the **MOT tracker + 3D trajectory generator** has a **first
-working version** (AB3DMOT wired to BEVHeight, trajectories drawn) but is limited by
-non-sequential data; the **2D make/model classifier** and the final **AV
-identification** stage are not started. This figure is the reference architecture
-for the whole project.
+```
+roadside video
+  -> camera calibration            (intrinsics + extrinsics, no ground truth required)
+  -> per-frame 3D bounding boxes   (BEVHeight, CPU-ported)
+  -> identity-linked trajectories  (AB3DMOT multi-object tracking)
+  -> AV vs human classification    (motion-behavior analysis; not started)
+```
 
 ---
 
 ## Status at a glance
 
-| Component | What it is | Status |
-|---|---|---|
-| 1. Base detector (BEVHeight) | Vision-based roadside 3D object detection | **Done** (runs on Mac CPU) |
-| 2. Camera calibration | Intrinsic + extrinsic estimation/refinement | **Done incl. new WI camera data** — self-calibration (AnyCalib + VP + lane-width anchor) validated at 0.62 m RMSE vs GPS (2026-07-15) |
-| 3. 3D boxing | Per-frame 3D bounding boxes from images | **Done** (inference works; it is BEVHeight's output) |
-| 4. Trajectory extraction (MOT) | Boxes across frames -> tracks + velocity/accel | **Working on real 30 Hz video** (Camera data clip tracked end-to-end, graded vs GPS) |
-| 5. AV identification | Classify each track as AV vs human | **Not started** (the actual research question) |
-
-![Camera track vs GPS — 0.62 m RMSE, self-calibrated](personal-documents/calibration/images/7-15-gps_vs_track.png)
-
-*Validation on WI DOT camera data (2026-07-15): trajectory from our fully
-self-calibrated camera pipeline (AnyCalib + vanishing point + lane-width
-anchor — no GT, no GPS input) vs the instrumented vehicle's GPS.*
-
-**New (2026-07-15):** full camera-data pipeline documentation —
-[Ultimate pipeline summary](personal-documents/7-15-2026-ultimate-pipeline-summary.md)
-(master component table + results + rationale) and the
-[step-by-step runbook](personal-documents/7-15-2026-runbook.md)
-(every command to reproduce the pipeline on a new clip). Run log with attempt
-history: [overnight loop](personal-documents/calibration/7-15-2026-overnight-loop.md).
+| Component | Status |
+|---|---|
+| BEVHeight detector, Mac CPU port | **Done.** Matches the published DAIR-V2X-I benchmark (Car 3D AP@0.5 moderate 69.4 on a 200-frame subset vs 65.46 published full-set) |
+| Self-calibration (intrinsics + extrinsics, no ground truth) | **Done for the primary site.** Camera height 16.2 to 16.3 m confirmed by four independent estimates within 0.1 m; per-clip rotation from a vanishing-point solver with a pose-consistency gate |
+| Ground-plane convention fix | **Done.** The training data places the road at z = -1.73 m; feeding it at z = 0 put every box 1.6 m underground. Box bottoms now sit within 0.08 to 0.11 m of the road across all five processed clips |
+| 3D detection on WI DOT camera data | **Done for five clips** (1,386 frames, both view directions, two seasons) |
+| Trajectory extraction (30 Hz MOT) | **Working.** Tracks graded against held-out GPS using an image-only target identification (see below) |
+| Trajectory accuracy vs GPS | Position RMSE **0.90 to 0.99 m** on the instrumented vehicle, identified independently of GPS |
+| Heading (yaw) refinement via self-training | **Pilot complete.** Median heading error 7.9 to 1.7 degrees on a held-out clip, detection rate unchanged |
+| AV vs human classification | Not started (the research question) |
 
 ---
 
-## Components
+## Pipeline on roadside camera data
 
-### 1. Base detector: BEVHeight (done, ported to Mac CPU)
+The full chain on a new clip, using the environment notes in
+[`docs/install.md`](docs/install.md). Calibration and analysis run under
+`.venv`; the detector and tracker run under the miniforge Python (see
+[`docs/run_and_eval.md`](docs/run_and_eval.md)).
 
-BEVHeight is the upstream vision-based roadside 3D detector. It takes RGB images
-from a fixed infrastructure camera, lifts image features into a Bird's-Eye-View
-grid (Lift-Splat-Shoot), and predicts 3D boxes. It is built for the roadside
-viewpoint rather than an ego-vehicle.
+```bash
+# 1. intrinsics from a single frame, no ground truth
+python scripts/calibration/run_anycalib_single.py \
+    --image data/camera-data/<CLIP>/frames/150.jpg \
+    --out-dir outputs/calibration/camera-data/<CLIP>
 
-**Our work here:** the upstream code only ran on NVIDIA GPUs. We ported the
-evaluation/inference path to run on a Mac with no CUDA:
+# 2. extrinsics: per-clip rotation from the lane vanishing point, site height
+#    as a constant established independently (guards against PTZ re-pointing)
+python scripts/calibration/site_extrinsic.py \
+    --frames-dir data/camera-data/<CLIP>/frames \
+    --anycalib-json outputs/calibration/camera-data/<CLIP>/150_anycalib_pinhole_pinhole.json \
+    --height 16.26 \
+    --reference outputs/calibration/camera-data/AV_T_WE_1/metric_extrinsic_site.json \
+    --out outputs/calibration/camera-data/<CLIP>/metric_extrinsic_site.json
 
-- Replaced the custom CUDA voxel-pooling kernel with a pure-PyTorch
-  `scatter_add_` fallback (`ops/voxel_pooling/`).
-- Removed/guarded hardcoded `.cuda()` calls (`layers/backbones/lss_fpn.py`,
-  `layers/heads/bev_height_head.py`).
-- Switched the PyTorch Lightning trainer to single-device CPU in the experiment
-  configs (`experiments/dair-v2x/...`).
+# 3. 3D detection (applies the DAIR ground-plane convention automatically)
+python scripts/object_detection/run_bevheight_generic.py \
+    --frames-dir data/camera-data/<CLIP>/frames_all \
+    --anycalib-json outputs/calibration/camera-data/<CLIP>/150_anycalib_pinhole_pinhole.json \
+    --extrinsic-json outputs/calibration/camera-data/<CLIP>/metric_extrinsic_site.json \
+    --out-dir outputs/object_detection/camera-data/<CLIP>_phase1
 
-Inference runs and produces KITTI-format metrics. Details:
-[`personal-documents/3-18-2026.md`](personal-documents/3-18-2026.md) and
-[`personal-documents/3-28-2026.md`](personal-documents/3-28-2026.md).
-Checkpoint used: `BEVHeight_R50_128_102.4_65.48_49_epochs.ckpt`.
+# 4. tracking at the true frame rate
+NUMBA_DISABLE_JIT=1 python scripts/tracking/run_ab3dmot.py --fps 30 --max-age 6 \
+    --det-dir outputs/object_detection/camera-data/<CLIP>_phase1 \
+    --out-dir  outputs/tracking/camera-data/<CLIP>_phase1
 
-### 2. Camera calibration (done, parked)
-
-Calibration finds the camera settings needed to relate 3D world points and 2D
-image pixels. Two separate things:
-
-- **Intrinsics** (fx, fy, cx, cy): the camera's internal settings (zoom and
-  image center). Estimated here by learned models.
-- **Extrinsics** (rotation, translation): where the camera sits and points
-  relative to the road. Refined here by geometry search, not a learned model.
-
-All calibration code is in [`scripts/calibration/`](scripts/calibration/).
-Everything was tested on a **single frame** (`000000`) of the DAIR-V2X-I i-s1
-subset. The planned 20-50 frame batch was never run before the phase was parked.
-
-**Intrinsic models compared:**
-
-- **AnyCalib** (ICCV 2025), `run_anycalib_single.py`. Learned, model-agnostic.
-  Predicts a per-pixel ray field and recovers the full intrinsics in closed
-  form. Input: one RGB image + a camera-model id (`pinhole`). Output:
-  [fx, fy, cx, cy]. Variants run: `anycalib_pinhole`, `anycalib_gen`.
-- **DeepCalib** (2018), **archived** under [`archive/DeepCalib/`](archive/DeepCalib/)
-  (runner: `archive/DeepCalib/run_deepcalib_single.py`). Older InceptionV3 net.
-  Predicts a single focal + one distortion value from a 299x299 image, which we
-  then convert into pinhole intrinsics. See `ARCHIVE.md` and the limitations
-  banner in that script (degenerate/saturated on our roadside view). Not used
-  for new runs — AnyCalib is the active intrinsic model.
-
-**Extrinsic refinement (orientation only, translation fixed):**
-
-- `road_calibrate_single.py` (object-box proxy): grid-search roll/pitch/yaw to
-  minimize the bottom-edge error between projected 3D boxes and 2D labels.
-- `road_line_calibrate_single.py` (true road-line): detect lane/road-edge lines,
-  map them to the ground plane, grid-search orientation so the lines run
-  longitudinal (minimize |dY/dX|).
-
-`visualize_projection_compare.py` renders before/after overlays and IoU metrics.
-The road-line method was subsequently refined (orientation-based noise rejection
-and a data-driven vanishing-point estimator); see
-[`personal-documents/06272026-calibration-improvement.md`](personal-documents/06272026-calibration-improvement.md).
-
-**Status rationale.** Calibration was assessed as an intermediate step and deemed
-sufficient for the current pipeline (advisor review, 2026-04-27), with the
-direction to prioritise building the end-to-end pipeline before further
-optimisation. On DAIR-V2X-I the dataset's ground-truth calibration is used
-directly; AnyCalib is retained as the fallback for cameras that ship without
-calibration. Context:
-[`personal-documents/632206-trajectory-pipeline-todo.md`](personal-documents/632206-trajectory-pipeline-todo.md).
-
-### 3. 3D boxing (done, = BEVHeight output)
-
-The per-frame 3D bounding boxes produced by the detector (class, 3D size,
-location, orientation). These are BEVHeight's native output and are already
-available through the CPU inference path above; no additional code is required at
-this stage. The subsequent phase consumes these boxes.
-
-### 4. Trajectory extraction / MOT (first version)
-
-Turns BEVHeight's per-frame 3D boxes (no identity) into **identity-linked
-trajectories** (same car → same ID across frames + velocity). Code in
-[`scripts/tracking/`](scripts/tracking/); detailed write-up in
-[`personal-documents/pipeline/6-29-2026-mot-tracking.md`](personal-documents/pipeline/6-29-2026-mot-tracking.md).
-
-**Tracker:** **AB3DMOT** (Weng et al., IROS 2020) — 3D Kalman filter + Hungarian
-matching on box centres. Chosen because it is paper-backed, takes generic 3D boxes
-(no image), and fits a fixed roadside camera (ego-motion compensation off). The
-tracker associates purely by geometry — it never sees the image — so velocity comes
-free from the Kalman state, but two nearby cars can cause an **ID switch**.
-`run_ab3dmot.py` uses only AB3DMOT's tracker core (+ small stubs in
-`scripts/tracking/xinshuo_stubs/`); the rest of AB3DMOT's framework is bypassed.
-
-**Visualization (three views, in `outputs/tracking/`):**
-- `plot_trajectories.py` → top-down BEV path plot per vehicle.
-- `overlay_trajectories.py` → each vehicle's trail drawn on the camera image.
-- `highlight_vehicle.py` → side-by-side start→end frames for one vehicle, with its
-  real BEVHeight box drawn in each (anchored on frames that have an actual
-  detection, not Kalman-coasted ones).
-
-**Limitation (important):** DAIR-V2X-I frames are **sampled, not video** (no
-timestamps; adjacent frames are seconds apart), so full continuous trajectories and
-trustworthy absolute speeds are not yet possible — work is done in short in-order
-segments. A genuinely sequential dataset (**V2X-Seq / SPD**, AIR-THU) is the
-prerequisite; the scripts run on it unmodified. Next build is **motion-feature
-extraction** (velocity → acceleration → jerk → lane-keeping) feeding the classifier.
-
-### 5. AV identification (not started)
-
-The core research question: classify each trajectory as autonomous or
-human-driven. This requires a behavioural feature definition (smoothness, jerk,
-lane-keeping, reaction timing), an initial classifier, and a source of
-AV-vs-human ground truth. To be scoped with the advisor.
-
-Primary reference: **Maresca et al., "Are you a robot? Detecting Autonomous
-Vehicles from Behavior Analysis" (arXiv:2403.09571, 2024)** — same task, but
-simulation-only (CARLA). Full review:
-[`personal-documents/632206-literature-review.md`](personal-documents/632206-literature-review.md).
-
----
-
-## Repo layout (what matters for this project)
-
-```
-models/, layers/, ops/        BEVHeight detector (backbone, BEV head, voxel pooling)
-experiments/dair-v2x/, ...    experiment configs (dair-v2x R50_102 is the CPU-patched one)
-evaluators/                   KITTI-format evaluation
-scripts/calibration/          OUR calibration work (AnyCalib + road refinement)
-scripts/object_detection/     OUR BEVHeight inference drivers (single + batch frames)
-scripts/tracking/             OUR MOT work (AB3DMOT driver + trajectory visualizers)
-scripts/data_converter/       DAIR/Rope3D -> KITTI conversion
-third_party/                  AnyCalib + AB3DMOT clones (active vendored deps)
-archive/                      unused tools kept for history (DeepCalib + runner)
-data/                         DAIR-V2X-I (+ subsets), v2x-c, v2x-v
-V2X-Raw-Datasets/             raw infrastructure images (sampled, not video — see tracking notes)
-outputs/calibration/          calibration run artifacts (currently sample 000000 only)
-outputs/object_detection/     BEVHeight 3D-box predictions + annotated frames
-outputs/tracking/             trajectories (tracks.json) + BEV/overlay/highlight images
-outputs/gallery/              curated visuals for professor/paper eyeballing
-docs/                         install notes, upstream prev-readme, paper PDF, summary
-personal-documents/           dated working logs and plans (internal)
+# 5. identify the instrumented vehicle from its hood marker (image only,
+#    GPS is never read), then grade that pre-selected track against GPS
+python scripts/tracking/identify_target_by_marker.py --clip <CLIP>
+python scripts/tracking/grade_target_vs_gps.py --clip <CLIP>
 ```
 
-## Running what works today
+Step 5 exists because selecting the track that best matches GPS and then
+reporting that track's error is selection on the metric being reported. The
+marker-based identification chooses the vehicle before GPS is consulted; on
+both front-view clips the choice was unanimous across every marker frame, and
+in both cases the best-GPS-match track was a different vehicle.
 
-BEVHeight CPU evaluation (DAIR-V2X-I, R50 102 config):
+The DAIR-V2X-I benchmark evaluation is unchanged from upstream:
 
 ```bash
 python experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py \
     --ckpt_path ./checkpoints -e -b 1 --gpus 0
 ```
 
-Calibration on one frame (example):
+## Fine-tuning on self-generated labels
 
-```bash
-# intrinsics (AnyCalib)
-python scripts/calibration/run_anycalib_single.py --model-id anycalib_pinhole --cam-id pinhole
-# extrinsic road-line refinement using those intrinsics
-python scripts/calibration/road_line_calibrate_single.py \
-    --pred-json outputs/calibration/anycalib_single/000000_anycalib_pinhole_pinhole.json
-```
+`scripts/finetune/` implements a self-training loop: high-confidence tracks
+generate 3D box labels (position from the track, heading from the track's
+direction of motion, height from the road plane, dimensions from the per-track
+median), a review tool renders labels beside raw predictions for human
+inspection, and a trainer updates the detection head with one clip held out.
+`docs/server-finetune-setup.md` documents the GPU-server environment for
+training the full model.
 
-BEVHeight batch detection + MOT trajectories (miniforge Python 3.12; AB3DMOT needs
-`NUMBA_DISABLE_JIT=1` for numba 0.64 compatibility):
-
-```bash
-# 3D detection over a frame range -> outputs/object_detection/our_intrinsics/
-python scripts/object_detection/run_bevheight_multiple.py --start 0 --end 5
-
-# track one in-order segment -> outputs/tracking/our_intrinsics/seg_00_05/tracks.json
-NUMBA_DISABLE_JIT=1 python scripts/tracking/run_ab3dmot.py --start 0 --end 5 --label seg_00_05
-
-# visualize: top-down plot, image overlay, side-by-side highlight
-python scripts/tracking/plot_trajectories.py    --label seg_00_05
-python scripts/tracking/overlay_trajectories.py --label seg_00_05
-python scripts/tracking/highlight_vehicle.py    --label seg_00_05            # auto-picks candidates
-```
-
-## Datasets
-
-DAIR-V2X-I (infrastructure side) is the main dataset, with the i-s1 subset used
-for the single-frame calibration tests. Raw infrastructure images live in
-`V2X-Raw-Datasets/`. Datasets are converted to KITTI format for the detector.
-
-**Note for the trajectory phase:** DAIR-V2X-I is a single-frame *detection*
-benchmark — its frames are **sampled, not a continuous video** (no timestamps;
-adjacent indices are seconds apart). It works for detection and short in-order MOT
-demos, but proper multi-object tracking needs a **sequential** dataset. The target
-is **V2X-Seq / SPD** (AIR-THU) — continuous frames with timestamps and ground-truth
-tracking IDs — a separate download.
+Pilot result (detection head only, held-out clip): median heading error
+7.9 to 1.7 degrees, boxes more than 45 degrees off reduced from 8.7% to 3.3%,
+detections per frame unchanged (7.30 to 7.57). Measured caveat: heading
+concentration on intersection scenes rises slightly (0.783 to 0.838), so
+preservation of lane-change behavior is tracked explicitly before classifier
+use.
 
 ---
 
+## Known issues under investigation
+
+**Per-frame heading instability.** Box orientation is predicted per frame from
+appearance alone; no temporal information links frames. On this footage roughly
+10% of car boxes deviate more than 45 degrees from the direction of travel
+(measured against track motion over 12,330 detections), concentrated at 40 to
+60 m range. The cameras sit ~16 m above the road with a 59 to 66 degree field
+of view, against ~6 m and 42 degrees in the training data, so orientation is
+read from viewpoints absent from training. Downstream consumers therefore take
+heading from track motion, not from per-frame boxes, and the self-training
+pilot above reduces the per-frame error directly.
+
+**Range-dependent depth bias.** Graded against GPS, detections read about
+1.2 m too near below 40 m and up to 1 m too far beyond 60 m, with the same
+signature on both graded clips. This is model depth behavior, not calibration:
+swapping the entire extrinsic leaves it unchanged. Addressing it requires
+training the height branch (GPU server; see `docs/server-finetune-setup.md`).
+
+**Duplicate detections.** The circle-NMS distance test compares squared
+distance against the radius parameter, so the effective suppression radius is
+the square root of the configured value (2.0 m for cars). Same-vehicle
+duplicates at ~2.5 m along the viewing ray survive. Transient duplicates do not
+hold tracker IDs, so the trajectory stage is largely unaffected.
+
+---
+
+## Repository layout
+
+```
+models/, layers/, ops/        BEVHeight detector (backbone, BEV head, voxel pooling)
+experiments/                  training and evaluation configs (dair-v2x R50_102 is CPU-patched)
+evaluators/                   KITTI-format evaluation
+dataset/                      DAIR-format dataloader
+scripts/calibration/          self-calibration (AnyCalib intrinsics, VP extrinsics, site height)
+scripts/object_detection/     BEVHeight inference drivers (DAIR and generic camera data)
+scripts/tracking/             AB3DMOT driver, target identification, GPS grading, visualizers
+scripts/finetune/             pseudo-label generation, label review, head fine-tuning
+scripts/reporting/            shareable visualization packages
+scripts/data_converter/       DAIR and Rope3D to KITTI conversion
+docs/                         install, dataset preparation, evaluation, server setup
+```
+
+Datasets, model checkpoints, run outputs, and vendored third-party code are not
+committed; see `.gitignore`.
+
+## Datasets
+
+- **DAIR-V2X-I** (infrastructure side): detection benchmark and the training
+  domain of the pretrained checkpoint (7,058 frames from five intersections).
+  Frames are sampled, not continuous video.
+- **WI DOT roadside clips**: 10-second 1920x1080 clips at 30 Hz from Beltline
+  highway cameras, each paired with a GPS trajectory of one instrumented
+  vehicle used exclusively for evaluation. Not distributed with this
+  repository.
+
 ## Provenance and credit
 
-This repository is a fork/extension of **BEVHeight** (Yang et al., CVPR 2023).
-All detector architecture, configs, and pretrained weights originate from that
-work. Our additions are the Mac-CPU port, the calibration study
-(`scripts/calibration/`), the BEVHeight inference drivers
-(`scripts/object_detection/`), the MOT integration + trajectory visualizers
-(`scripts/tracking/`), and the planned AV-identification stage. The tracker is
-**AB3DMOT** (Weng et al., IROS 2020), used as a vendored dependency (core only).
+This repository extends **BEVHeight** (Yang et al., CVPR 2023); the detector
+architecture, configs, and pretrained weights originate there. Additions here:
+the Mac CPU port, the self-calibration pipeline, the ground-plane convention
+correction, the generic-camera inference drivers, the MOT integration with
+image-only target identification and GPS grading, the self-training pipeline,
+and the reporting tools. Tracking uses the **AB3DMOT** core (Weng et al., IROS
+2020).
 
 Built on: [BEVHeight](https://github.com/ADLab-AutoDrive/BEVHeight),
 [BEVDepth](https://github.com/Megvii-BaseDetection/BEVDepth),
 [DAIR-V2X](https://github.com/AIR-THU/DAIR-V2X),
 [AB3DMOT](https://github.com/xinshuoweng/AB3DMOT),
-[AnyCalib](https://github.com/javrtg/AnyCalib), DeepCalib (archived).
+[AnyCalib](https://github.com/javrtg/AnyCalib).
 
 ```bibtex
 @inproceedings{yang2023bevheight,
     title={BEVHeight: A Robust Framework for Vision-based Roadside 3D Object Detection},
     author={Yang, Lei and Yu, Kaicheng and Tang, Tao and Li, Jun and Yuan, Kun and Wang, Li and Zhang, Xinyu and Chen, Peng},
     booktitle={IEEE/CVF Conf.~on Computer Vision and Pattern Recognition (CVPR)},
-    month = mar,
     year={2023}
 }
 ```
-
----
-
-*Note: the original detailed run summaries lived under `summary/`. If that folder
-is missing locally it may not have synced; the per-component logs in
-`personal-documents/` and [`docs/summary.md`](docs/summary.md) cover the same material.*
