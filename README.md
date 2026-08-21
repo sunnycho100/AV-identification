@@ -8,7 +8,10 @@ al., arXiv:2403.09571) addresses this task in simulation only; this project
 targets the real-world setting.
 
 This repository extends **BEVHeight** (Yang et al., CVPR 2023). The upstream
-README is preserved at [`docs/prev-readme.md`](docs/prev-readme.md).
+README is preserved at [`docs/prev-readme.md`](docs/prev-readme.md). Datasets,
+checkpoints, and outputs are not committed: see
+[`docs/getting-started.md`](docs/getting-started.md) for what to download,
+where files go, and which script runs each stage.
 
 ---
 
