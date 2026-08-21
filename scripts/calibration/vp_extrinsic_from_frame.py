@@ -1,6 +1,6 @@
 """Derive a road-aligned extrinsic from one frame's lane vanishing point.
 
-Reuses road_line_calibrate_v3's segment detector + RANSAC VP (both GT-free).
+Uses lsd_vanishing_point's independently fitted road lines (GT-free).
 Given AnyCalib K and an assumed camera height, solves pitch and yaw in closed
 form (roll = 0) so the ground frame's X axis runs along the road:
 
@@ -31,8 +31,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from scripts.calibration.road_line_calibrate_v3 import (
-    detect_lane_like_segments, ransac_vanishing_point)
+from scripts.calibration.lsd_vanishing_point import lsd_vanishing_point
 
 
 def base_rotation(pitch):
@@ -59,10 +58,18 @@ def solve_pose(K, vp_uv, height):
     return R, t, math.degrees(pitch), math.degrees(yaw)
 
 
-def draw_check_overlay(img, K, R, t, vp_uv, segments, out_path):
-    """Ground-frame guide lines (parallel to road X) projected onto the image."""
-    for x1, y1, x2, y2, _ in segments:
-        cv2.line(img, (x1, y1), (x2, y2), (255, 255, 255), 1)
+def draw_check_overlay(img, K, R, t, vp_uv, lines, out_path):
+    """Ground-frame guide lines (parallel to road X) projected onto the image.
+
+    `lines` are the fitted road lines (normal, offset, length) drawn in white; the
+    orange ground guides must end up parallel to them.
+    """
+    h = img.shape[0]
+    for n, d, _ in lines:
+        if abs(n[0]) < 1e-9:
+            continue
+        cv2.line(img, (int(d / n[0]), 0), (int((d - n[1] * h) / n[0]), h),
+                 (255, 255, 255), 1, cv2.LINE_AA)
     for y_lat in range(-20, 21, 4):
         pts = []
         for x_fwd in np.linspace(5, 150, 60):
@@ -93,14 +100,12 @@ def main():
     K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=float)
 
     img = cv2.imread(args.image)
-    segments, _ = detect_lane_like_segments(img)
-    rng = np.random.default_rng(0)
-    vp, inlier_mask, _ = ransac_vanishing_point(segments, n_iters=1500, angle_deg=6.0, rng=rng)
+    vp, lines, diag = lsd_vanishing_point(img)
     if vp is None:
-        sys.exit("no vanishing point found")
-    inliers = [s for s, keep in zip(segments, inlier_mask) if keep]
-    print(f"segments: {len(segments)} detected, {len(inliers)} VP inliers; "
-          f"VP = ({vp[0]:.0f}, {vp[1]:.0f}) px")
+        sys.exit(f"no vanishing point found ({diag.get('reject', 'too few road lines')})")
+    print(f"VP = ({vp[0]:.1f}, {vp[1]:.1f}) px from {diag['n_lines']} road lines; "
+          f"median residual {diag['residual_median_px']:.1f} px, "
+          f"ramp {diag['ramp_corr']:+.2f}")
 
     R, t, pitch_deg, yaw_deg = solve_pose(K, vp, args.height)
     print(f"solved pose: pitch = {pitch_deg:.1f} deg down, "
@@ -110,6 +115,7 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({
         "rotation": R.tolist(), "translation": t.tolist(),
+        "diagnostics": {"vp_px": [float(vp[0]), float(vp[1])], **diag},
         "note": (f"VP-derived pose from {Path(args.image).name}: "
                  f"pitch={pitch_deg:.2f}deg yaw={yaw_deg:.2f}deg roll=0 "
                  f"height={args.height}m ASSUMED (no metric anchor yet)"),
@@ -117,7 +123,7 @@ def main():
     print(f"wrote {out}")
 
     overlay_path = out.with_name(out.stem + "_check.jpg")
-    draw_check_overlay(img, K, R, t, vp, inliers, overlay_path)
+    draw_check_overlay(img, K, R, t, vp, lines, overlay_path)
     print(f"wrote {overlay_path} (orange guides must run parallel to the lanes)")
 
 

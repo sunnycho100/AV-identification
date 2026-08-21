@@ -2,11 +2,11 @@
 
 Steps (all GT/GPS-free):
 1. Median-blend the extracted frames (static camera) -> vehicle-free background.
-2. Detect lane segments + RANSAC vanishing point on the background
-   (reuses road_line_calibrate_v3), solve pitch/yaw (vp_extrinsic_from_frame).
-3. Backproject segment midpoints to the ground plane at h=1; cluster their
-   lateral (ground-Y) offsets into lane lines; adjacent-cluster spacing scales
-   linearly with h, so h = 3.6576 / median_spacing_at_h1.
+2. Fit road lines independently + least-squares vanishing point
+   (lsd_vanishing_point), solve pitch/yaw (vp_extrinsic_from_frame).
+3. Sweep the camera height; at each one project a grid of ground lines spaced
+   one lane apart and score how well it overlays the detected road lines. The
+   best-scoring height wins, and the width of the minimum reports confidence.
 4. Write the metric extrinsic + a verification overlay with a 3.66 m grid.
 
 Run:
@@ -26,46 +26,127 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from scripts.calibration.road_line_calibrate_v3 import (
-    detect_lane_like_segments, ransac_vanishing_point)
+from scripts.calibration.lsd_vanishing_point import lsd_vanishing_point
 from scripts.calibration.vp_extrinsic_from_frame import solve_pose
 
 LANE_WIDTH_M = 3.6576  # 12 ft US standard
+MEASURE_ROW = 780.0    # image row where grid and detected lines are compared
 
 
 def median_background(frames_dir):
+    """Vehicle-free background. Only useful if the camera is truly static: these
+    pole-mounted cameras sway, so the blend smears lane edges and measurably
+    degrades the line fits (HV_T_EW_2 misfit 17.0 px blended vs 7.8 px single).
+    Kept behind --median-background; a single sharp frame is the default."""
     paths = sorted(Path(frames_dir).glob("*.jpg"))
     stack = np.stack([cv2.imread(str(p)) for p in paths])
     return np.median(stack, axis=0).astype(np.uint8), len(paths)
 
 
-def ground_point(uv, K, R, t, eps=1e-9):
-    """Intersect the pixel ray with the z=0 ground plane; None if ray points up."""
-    d_cam = np.linalg.inv(K) @ np.array([uv[0], uv[1], 1.0])
-    d = R.T @ d_cam                      # ray direction in ground frame
-    C = -R.T @ t                         # camera center in ground frame
-    if d[2] > -eps:
+def solve_per_frame(frames_dir, K, lane_width):
+    """Solve each frame independently and aggregate.
+
+    One frame is not enough: on HV_T_EW_2 the answer moves 15.95 -> 18.23 m
+    between frames of the same clip, because which lines LSD recovers depends on
+    passing vehicles and lighting. The spread across frames is the honest error
+    bar, so it is reported rather than hidden behind a single pick.
+    """
+    rows = []
+    for path in sorted(Path(frames_dir).glob("*.jpg")):
+        img = cv2.imread(str(path))
+        vp, lines, diag = lsd_vanishing_point(img)
+        if vp is None:
+            continue
+        line_x = np.array(sorted((d - n[1] * MEASURE_ROW) / n[0]
+                                 for n, d, _ in lines if abs(n[0]) > 1e-9))
+        if len(line_x) < 4:
+            continue
+        h, misfit, _ = solve_height(K, vp, line_x, lane_width)
+        if h is not None:
+            rows.append({"frame": path.name, "vp": [float(vp[0]), float(vp[1])],
+                         "height_m": h, "misfit_px": misfit,
+                         "n_lines": len(line_x)})
+    return rows
+
+
+def grid_x(K, R, t, lat, row=MEASURE_ROW):
+    """Image x where the ground line at lateral offset `lat` crosses `row`.
+
+    A ground line projects to an image line, so two projected points define it
+    exactly; no sampling needed.
+    """
+    pts = []
+    for x_fwd in (30.0, 150.0):
+        p = R @ np.array([x_fwd, lat, 0.0]) + t
+        if p[2] <= 0.5:
+            return None
+        uv = K @ p
+        pts.append((uv[0] / uv[2], uv[1] / uv[2]))
+    (u1, v1), (u2, v2) = pts
+    if abs(v2 - v1) < 1e-9:
         return None
-    s = -C[2] / d[2]
-    return C + s * d
+    return u1 + (u2 - u1) * (row - v1) / (v2 - v1)
 
 
-def cluster_1d(values, weights, gap_frac=0.35):
-    """Sort and split where the gap exceeds gap_frac * median lane guess."""
-    order = np.argsort(values)
-    v, w = np.asarray(values)[order], np.asarray(weights)[order]
-    diffs = np.diff(v)
-    typical = np.median(diffs[diffs > 1e-6]) if len(diffs) else 0
-    thresh = max(typical * 1.5, 1e-6) * gap_frac / 0.35
-    clusters, cur_v, cur_w = [], [v[0]], [w[0]]
-    for val, wt, gap in zip(v[1:], w[1:], diffs):
-        if gap > thresh:
-            clusters.append(np.average(cur_v, weights=cur_w))
-            cur_v, cur_w = [], []
-        cur_v.append(val)
-        cur_w.append(wt)
-    clusters.append(np.average(cur_v, weights=cur_w))
-    return np.array(clusters)
+def grid_misfit(K, vp, height, line_x, lane_width, n_lanes=14):
+    """Symmetric px distance between the projected lane grid and the road lines."""
+    R, t, _, _ = solve_pose(K, vp, height)
+    return grid_misfit_pose(K, R, t, line_x, lane_width, n_lanes)
+
+
+def grid_misfit_pose(K, R, t, line_x, lane_width, n_lanes=14):
+    """Same score for a pose given directly, so an extrinsic read from a file can
+    be graded without going back through its vanishing point.
+
+    Only the grid's *spacing* is under test, so its lateral offset is optimised
+    first: a grid that merely sits one lane over must not be penalised.
+
+    Both directions are scored. Measuring only line-to-grid rewards a grid that is
+    too dense, since a denser grid always has something near every line; at twice
+    the true height the grid projects twice as fine and scored perfectly. Charging
+    grid lines that match nothing removes that bias.
+    """
+    gx = [g for lat in np.arange(-n_lanes * lane_width, n_lanes * lane_width + 1e-6,
+                                 lane_width)
+          if (g := grid_x(K, R, t, lat)) is not None]
+    if len(gx) < 3:
+        return np.inf
+    gx = np.array(sorted(gx))
+    lo, hi = line_x.min(), line_x.max()
+    best = np.inf
+    for anchor in line_x:                          # slide the grid onto each line
+        shifted = gx + (anchor - gx[np.argmin(np.abs(gx - anchor))])
+        inside = shifted[(shifted >= lo) & (shifted <= hi)]
+        if len(inside) < 2:
+            continue
+        fwd = np.median([np.min(np.abs(shifted - x)) for x in line_x])
+        rev = np.median([np.min(np.abs(line_x - g)) for g in inside])
+        best = min(best, float((fwd + rev) / 2))
+    return best
+
+
+def solve_height(K, vp, line_x, lane_width, h_lo=8.0, h_hi=40.0, step=0.25):
+    """Height whose lane grid best overlays the detected road lines.
+
+    Scores the whole grid against every line at once, rather than picking one gap
+    out of a cluster list, which is what made the old solver return 30.09 m and
+    10.81 m for the same camera pose. Returns (height, misfit_px, (lo, hi)) where
+    the interval spans every height scoring within 1.5x of the minimum: a wide
+    interval means the geometry does not pin the scale down and the number should
+    not be trusted on its own.
+    """
+    hs = np.arange(h_lo, h_hi + 1e-9, step)
+    sc = np.array([grid_misfit(K, vp, h, line_x, lane_width) for h in hs])
+    if not np.isfinite(sc).any():
+        return None, np.inf, (np.nan, np.nan)
+    i = int(np.argmin(sc))
+    best = hs[i]
+    if 0 < i < len(hs) - 1:                        # parabola vertex, sub-step
+        den = sc[i - 1] - 2 * sc[i] + sc[i + 1]
+        if den != 0:
+            best = hs[i] - 0.5 * (sc[i + 1] - sc[i - 1]) / den * step
+    near = hs[sc < sc[i] * 1.5]
+    return float(best), float(sc[i]), (float(near.min()), float(near.max()))
 
 
 def main():
@@ -74,74 +155,52 @@ def main():
     ap.add_argument("--anycalib-json", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--lane-width", type=float, default=LANE_WIDTH_M)
+    ap.add_argument("--median-background", action="store_true",
+                    help="blend all frames instead of using one sharp frame; "
+                         "only helps if the camera does not sway")
     args = ap.parse_args()
 
     pred = json.loads(Path(args.anycalib_json).read_text())["prediction"]["intrinsics"]
     fx, fy, cx, cy = pred[:4]
     K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=float)
 
-    bg, n_frames = median_background(args.frames_dir)
-    print(f"background: median of {n_frames} frames")
+    per = solve_per_frame(args.frames_dir, K, args.lane_width)
+    if len(per) < 3:
+        sys.exit(f"only {len(per)} frames yielded a solution - not enough to trust")
+    hs = np.array([r["height_m"] for r in per])
+    q1, q3 = np.percentile(hs, [25, 75])
+    print(f"per-frame heights ({len(per)} frames): {np.round(sorted(hs), 2).tolist()}")
+    print(f"median {np.median(hs):.2f} m   IQR {q1:.2f}-{q3:.2f} m "
+          f"({q3 - q1:.2f} m wide)")
+    if q3 - q1 > 1.5:
+        print("WARN: heights disagree across frames of the same clip; the lane "
+              "grid does not pin the scale down here (needs a depth anchor, "
+              "e.g. the 12.19 m dash period)")
+    best = min(per, key=lambda r: abs(r["height_m"] - np.median(hs)))
+    bg = cv2.imread(str(Path(args.frames_dir) / best["frame"]))
+    src = f"{len(per)} frames, median-representative {best['frame']}"
+    print(f"source: {src}")
 
-    segments, _ = detect_lane_like_segments(bg)
-    rng = np.random.default_rng(0)
-    vp, inlier_mask, _ = ransac_vanishing_point(segments, 1500, 6.0, rng)
+    vp, lines, diag = lsd_vanishing_point(bg)
     if vp is None:
-        sys.exit("no VP on background image")
-    inliers = [s for s, k in zip(segments, inlier_mask) if k]
-    print(f"background segments: {len(segments)}, VP inliers: {len(inliers)}, "
-          f"VP=({vp[0]:.0f},{vp[1]:.0f})")
+        sys.exit(f"no VP on background image ({diag.get('reject', 'too few road lines')})")
+    print(f"background road lines: {diag['n_lines']}, VP=({vp[0]:.1f},{vp[1]:.1f}), "
+          f"median residual {diag['residual_median_px']:.1f} px")
 
-    R, t1, pitch_deg, yaw_deg = solve_pose(K, vp, height=1.0)  # h=1 reference
+    _, _, pitch_deg, yaw_deg = solve_pose(K, vp, height=1.0)   # rotation only
     print(f"pose: pitch={pitch_deg:.1f} yaw={yaw_deg:.1f} (roll=0)")
 
-    ys, ws = [], []
-    for x1, y1, x2, y2, length in inliers:
-        mid = ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
-        p = ground_point(mid, K, R, t1)
-        if p is None or p[0] <= 0:
-            continue
-        ys.append(p[1])
-        ws.append(length)
-    if len(ys) < 4:
-        sys.exit(f"only {len(ys)} usable lane points - not enough to cluster")
+    line_x = np.array(sorted((d - n[1] * MEASURE_ROW) / n[0]
+                             for n, d, _ in lines if abs(n[0]) > 1e-9))
+    if len(line_x) < 4:
+        sys.exit(f"only {len(line_x)} usable road lines - not enough to fit a grid")
 
-    centers = np.sort(cluster_1d(ys, ws))
-    # physical prior: camera height 8-40 m => valid lane spacing at h=1 in
-    # [w/40, w/8]. Same-paint-line splits are far below this band.
-    s_min, s_max = args.lane_width / 40.0, args.lane_width / 8.0
-    # merge over-split clusters (closer than half the minimum valid spacing)
-    merged = [centers[0]]
-    for c in centers[1:]:
-        if c - merged[-1] < s_min / 2:
-            merged[-1] = (merged[-1] + c) / 2
-        else:
-            merged.append(c)
-    merged = np.array(merged)
-    # candidate spacings: all pairwise gaps inside the physical band
-    diffs = np.abs(merged[:, None] - merged[None, :])[np.triu_indices(len(merged), 1)]
-    cands = np.sort(diffs[(diffs >= s_min) & (diffs <= s_max)])
-    print(f"lane-line clusters: {len(centers)} -> {len(merged)} after merge; "
-          f"candidate spacings in [{s_min:.3f},{s_max:.3f}]: {np.round(cands, 4).tolist()}")
-    if len(cands) == 0:
-        sys.exit("FAIL: no lane spacing inside the 8-40 m height band - "
-                 "bad VP or poor lane visibility; do not trust this pose")
-    # smallest well-supported peak = fundamental lane width (multiples are
-    # 2-lane gaps). support = candidates within +-15%.
-    best = None
-    for c in cands:
-        group = cands[(cands > 0.85 * c) & (cands < 1.15 * c)]
-        support = len(group)
-        if support >= 2 or len(cands) == 1:
-            best = float(np.median(group))
-            break
-    if best is None:
-        best = float(cands[0])
-        print("WARN: no spacing had support >=2; using smallest candidate")
-    s1 = best
-    height = args.lane_width / s1
-    print(f"chosen spacing (h=1): {s1:.4f} -> "
-          f"HEIGHT = {args.lane_width}/{s1:.4f} = {height:.2f} m")
+    height = float(np.median(hs))
+    misfit = float(np.median([r["misfit_px"] for r in per]))
+    h_lo, h_hi = float(q1), float(q3)
+    s1 = args.lane_width / height
+    print(f"HEIGHT = {height:.2f} m (median of {len(per)} frames), "
+          f"median misfit {misfit:.1f} px")
 
     R_final, t_final, _, _ = solve_pose(K, vp, height=height)
 
@@ -151,13 +210,15 @@ def main():
         "rotation": R_final.tolist(), "translation": t_final.tolist(),
         "note": (f"VP pose (pitch={pitch_deg:.2f} yaw={yaw_deg:.2f} roll=0) + "
                  f"METRIC height {height:.2f} m from {args.lane_width} m lane-width anchor; "
-                 f"{len(inliers)} VP-inlier segments on median background of {n_frames} frames"),
+                 f"{diag['n_lines']} independently fitted road lines on {src}"),
         "diagnostics": {
-            "vp_px": [float(vp[0]), float(vp[1])],
+            "vp_px": [float(vp[0]), float(vp[1])], **diag,
             "pitch_deg": pitch_deg, "yaw_deg": yaw_deg,
             "height_m": height,
-            "n_clusters": int(len(centers)),
-            "candidate_spacings_h1": cands.tolist(),
+            "n_road_lines": int(len(line_x)),
+            "grid_misfit_px": misfit,
+            "height_iqr_m": [h_lo, h_hi],
+            "per_frame": per,
             "chosen_spacing_h1": s1,
         },
     }, indent=2))
@@ -165,8 +226,12 @@ def main():
 
     # verification overlay: longitudinal grid lines spaced exactly one lane width
     vis = bg.copy()
-    for x1, y1, x2, y2, _ in inliers:
-        cv2.line(vis, (x1, y1), (x2, y2), (255, 255, 255), 2)
+    for n, d, _ in lines:
+        if abs(n[0]) < 1e-9:
+            continue
+        h_img = vis.shape[0]
+        cv2.line(vis, (int(d / n[0]), 0), (int((d - n[1] * h_img) / n[0]), h_img),
+                 (255, 255, 255), 2, cv2.LINE_AA)
     for i in range(-8, 9):
         y_lat = i * args.lane_width
         pts = []
@@ -185,5 +250,32 @@ def main():
     print(f"wrote {check} (orange grid must land ON adjacent lane lines)")
 
 
+
+
+def _selfcheck():
+    """A grid scored against lines generated at a known height must recover it,
+    and a wrong height must score clearly worse."""
+    K = np.array([[1532.2, 0, 961.7], [0, 1514.3, 539.7], [0, 0, 1]])
+    vp, truth_h = (156.6, 21.9), 16.0
+    R, t, _, _ = solve_pose(K, vp, truth_h)
+    line_x = np.array(sorted(
+        g for lat in np.arange(-5 * LANE_WIDTH_M, 5 * LANE_WIDTH_M, LANE_WIDTH_M)
+        if (g := grid_x(K, R, t, lat)) is not None))
+    assert len(line_x) >= 6, len(line_x)
+    got, misfit, (lo, hi) = solve_height(K, vp, line_x, LANE_WIDTH_M)
+    assert got is not None and abs(got - truth_h) < 0.15, (got, truth_h)
+    assert misfit < 1.0, misfit
+    assert grid_misfit(K, vp, truth_h * 1.5, line_x, LANE_WIDTH_M) > misfit * 3
+    # doubling the height projects a grid twice as fine; a one-sided score called
+    # that a perfect fit, so it must now be rejected too
+    assert grid_misfit(K, vp, truth_h * 2.0, line_x, LANE_WIDTH_M) > misfit * 3
+    assert lo <= truth_h <= hi and hi - lo < 3.0, (lo, hi)
+    print(f"selfcheck ok (recovered {got:.2f} m vs {truth_h} m, misfit {misfit:.2f} px, "
+          f"interval {lo:.1f}-{hi:.1f} m)")
+
+
 if __name__ == "__main__":
-    main()
+    if "--selfcheck" in sys.argv:
+        _selfcheck()
+    else:
+        main()
