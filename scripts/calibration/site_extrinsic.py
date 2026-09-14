@@ -103,7 +103,7 @@ def main():
         "rotation": R.tolist(), "translation": t.tolist(),
         "note": (f"VP pose (pitch={pitch:.2f} yaw={yaw:.2f} roll=0) over "
                  f"{diag['n_frames']} frames + site height {args.height} m "
-                 f"(established GPS-free, not solved from this clip)"),
+                 f"(site constant; provenance in this script's docstring, partly GPS-derived; not solved from this clip)"),
         "diagnostics": {"pitch_deg": pitch, "yaw_deg": yaw,
                         "height_m": args.height, "height_source": "site constant",
                         **diag},
