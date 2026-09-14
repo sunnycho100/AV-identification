@@ -19,6 +19,7 @@ Run (demo on DAIR frame 000000 using OUR calibration outputs):
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 import cv2
@@ -101,8 +102,17 @@ def build_mats_dict(image_path, K, lidar2cam, final_dim, img_conf):
     img = Image.open(image_path).convert("RGB")
     src_wh = img.size
     img, ida = resize_img_and_ida(img, src_wh, final_dim)
-    img = (np.array(img, dtype=np.float32) - np.array(img_conf["img_mean"])) / \
-        np.array(img_conf["img_std"])
+    # mmcv.imnormalize(..., to_rgb) verbatim (mmcv/image/photometric.py), so the
+    # channel order matches training: to_rgb=True reverses the channels of the
+    # already-RGB PIL array, which is what the checkpoint was trained on.
+    img = np.array(img, dtype=np.float32)
+    if img_conf["to_rgb"]:
+        cv2.cvtColor(img, cv2.COLOR_BGR2RGB, img)
+    # mean/std go through float32 first, exactly as the dataset class stores them
+    mean = np.float64(np.array(img_conf["img_mean"], np.float32).reshape(1, -1))
+    stdinv = 1 / np.float64(np.array(img_conf["img_std"], np.float32).reshape(1, -1))
+    cv2.subtract(img, mean, img)
+    cv2.multiply(img, stdinv, img)
     img_t = torch.from_numpy(img).permute(2, 0, 1).float()  # (3,fH,fW)
 
     def nest(m):  # (4,4) -> (B=1, sweeps=1, cams=1, 4, 4)
@@ -163,7 +173,8 @@ def main():
 
     final_dim = (864, 1536)
     img_conf = dict(img_mean=[123.675, 116.28, 103.53],
-                    img_std=[58.395, 57.12, 57.375])
+                    img_std=[58.395, 57.12, 57.375],
+                    to_rgb=True)
 
     K = load_K_from_anycalib(args.anycalib_json)
     lidar2cam = load_extrinsic(args.roadline_json, args.gt_extrinsic)
@@ -188,5 +199,42 @@ def main():
     print(f"\nSaved standardized input -> {out}")
 
 
+def _selfcheck():
+    """The normalized tensor must be bit-identical to what upstream's
+    mmcv.imnormalize(np.array(PIL_RGB), mean, std, to_rgb) produces, so the
+    channel-order bug (feeding R/B swapped relative to training) cannot return."""
+    import mmcv  # test-only: the module itself stays free of the mm* stack
+
+    img_conf = dict(img_mean=[123.675, 116.28, 103.53],
+                    img_std=[58.395, 57.12, 57.375], to_rgb=True)
+    final_dim = (864, 1536)
+    image_path = Path(__file__).resolve().parents[2] / "data/dair-v2x-i/image/000000.jpg"
+    K = np.array([[2181.0, 0, 962.0], [0, 2179.0, 550.0], [0, 0, 1]])
+    lidar2cam = np.array([[0.0, -1.0, 0.0, 0.0],
+                          [0.0, 0.0, -1.0, 8.0],
+                          [1.0, 0.0, 0.0, 0.0],
+                          [0.0, 0.0, 0.0, 1.0]])
+
+    img_t, _, _ = build_mats_dict(str(image_path), K, lidar2cam, final_dim, img_conf)
+
+    src = Image.open(image_path).convert("RGB")
+    pil, _ = resize_img_and_ida(src, src.size, final_dim)
+    ref = mmcv.imnormalize(np.array(pil), np.array(img_conf["img_mean"], np.float32),
+                           np.array(img_conf["img_std"], np.float32), img_conf["to_rgb"])
+    ref_t = torch.from_numpy(ref).permute(2, 0, 1).float()
+    assert torch.equal(img_t[0, 0, 0], ref_t), \
+        f"adapter != mmcv.imnormalize, max diff {(img_t[0,0,0]-ref_t).abs().max()}"
+
+    # and the swapped-channel version must NOT match, or the check proves nothing
+    img_conf_norgb = dict(img_conf, to_rgb=False)
+    bad, _, _ = build_mats_dict(str(image_path), K, lidar2cam, final_dim, img_conf_norgb)
+    assert not torch.equal(bad[0, 0, 0], ref_t), "to_rgb flag is being ignored"
+    print("selfcheck ok (normalization bit-identical to mmcv.imnormalize, "
+          "to_rgb honored)")
+
+
 if __name__ == "__main__":
-    main()
+    if "--selfcheck" in sys.argv:
+        _selfcheck()
+    else:
+        main()

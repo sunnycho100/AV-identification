@@ -1,6 +1,7 @@
 """Run BEVHeight 3D detection on a single DAIR frame (CPU), twice with GT vs AnyCalib intrinsics."""
 import importlib.util
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -19,7 +20,9 @@ from scripts.adapter.calib_to_bevheight_input import build_mats_dict, load_K_fro
 from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 
 # --- exp configs (import module with hyphenated path via importlib) ---
-_exp_path = ROOT / "experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py"
+# BEVH_RANGE=140 selects the 140.8 m config and checkpoint (default 102.4 m)
+BEV_RANGE = os.environ.get("BEVH_RANGE", "102")
+_exp_path = ROOT / f"experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_{BEV_RANGE}.py"
 _spec = importlib.util.spec_from_file_location("bev_exp", _exp_path)
 bev_exp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bev_exp)
@@ -30,13 +33,14 @@ backbone_conf = bev_exp.backbone_conf
 head_conf = bev_exp.head_conf
 CLASSES = bev_exp.CLASSES
 
-SCORE_THRESH = 0.3
+SCORE_THRESH = 0.45  # upstream's export threshold (BEVHeight evaluators/result2kitti)
 FRAME_ID = "000000"
 IMAGE_PATH = ROOT / "data/dair-v2x-i/image/000000.jpg"
 GT_EXTRINSIC_PATH = ROOT / "data/dair-v2x-i/calib/virtuallidar_to_camera/000000.json"
 GT_INTRINSIC_PATH = ROOT / "data/dair-v2x-i/calib/camera_intrinsic/000000.json"
 ANYCALIB_PATH = ROOT / "outputs/calibration/anycalib_single/000000_anycalib_pinhole_pinhole.json"
-CKPT_PATH = ROOT / "checkpoints/BEVHeight_R50_128_102.4_65.48_49_epochs.ckpt"
+CKPT_PATH = ROOT / {"102": "checkpoints/BEVHeight_R50_128_102.4_65.48_49_epochs.ckpt",
+                    "140": "checkpoints/BEVHeight_R50_128_140.8_75.22_49_epochs.ckpt"}[BEV_RANGE]
 OUT_ROOT = ROOT / "outputs/object_detection"
 PERSONAL_ROOT = ROOT / "personal-documents/object-detection"
 
@@ -132,9 +136,8 @@ def render_annotated(preds: list, K: np.ndarray, lidar2cam: np.ndarray, out_path
 
     for det in preds:
         l, w, h = det["l"], det["w"], det["h"]
-        # get_lidar_3d_8points expects [length, width, height] (length along the
-        # heading axis) and internally lowers the center by h/2, so pass z + h/2
-        # (model z is the box bottom) to seat the box correctly in height.
+        # get_lidar_3d_8points expects [dx, dy, dz] = [w, l, h] (width along X,
+        # length along Y in LiDAR frame) and internally lowers center by h/2.
         center = [det["x"], det["y"], det["z"] + h / 2.0]
         yaw = det["yaw"]
         corners = get_lidar_3d_8points([l, w, h], yaw, center)

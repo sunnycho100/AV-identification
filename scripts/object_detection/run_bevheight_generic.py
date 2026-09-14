@@ -72,6 +72,8 @@ def render_annotated(image_path, preds, K, lidar2cam, out_path):
     for det in preds:
         l, w, h = det["l"], det["w"], det["h"]
         center = [det["x"], det["y"], det["z"] + h / 2.0]
+        # get_lidar_3d_8points expects [dx, dy, dz] = [w, l, h] where dx is size
+        # along X (width) and dy is size along Y (length).
         corners = get_lidar_3d_8points([l, w, h], det["yaw"], center)
         corners_cam = (lidar2cam @ np.concatenate(
             [corners, np.ones((8, 1))], axis=1).T).T[:, :3]
@@ -123,6 +125,7 @@ def main():
     # the per-frame files stay a bare list of detections (run_ab3dmot reads them
     # that way), so provenance goes in a sidecar
     (out_dir / "calibration_used.json").write_text(json.dumps({
+        "checkpoint": CKPT_PATH.name,
         "anycalib_json": str(args.anycalib_json),
         "extrinsic_json": str(args.extrinsic_json),
         "ground_shift_applied_m": 0.0 if args.no_ground_shift else -DAIR_GROUND_Z,
