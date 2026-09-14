@@ -1,0 +1,38 @@
+{
+ "site": "T",
+ "lat0": 43.0353,
+ "lon0": -89.4215,
+ "height_used_m": 16.26,
+ "clips": [
+  {
+   "name": "AV_T_EW_3",
+   "pose": "P0",
+   "track": "outputs/tracking/camera-data/AV_T_EW_3_r140/target_track.json",
+   "identified_from": "hood marker template votes, image only, 49/49"
+  },
+  {
+   "name": "HV_T_EW_1",
+   "pose": "P0",
+   "track": "outputs/tracking/camera-data/HV_T_EW_1_r140/target_track.json",
+   "identified_from": "hood marker template votes, image only, 60/64"
+  },
+  {
+   "name": "AV_T_WE_1",
+   "pose": "P0",
+   "track": "outputs/tracking/camera-data/AV_T_WE_1_r140/tracks.json",
+   "track_id": "27",
+   "identified_from": "manual pick from label_tracks_on_frame.py --run r140 frame 60, image only: black sedan with roof plate and red trunk symbol; track 25 is a 6-frame stalled fragment before it"
+  },
+  {
+   "name": "AV_T_WE_3",
+   "pose": "P0",
+   "track": "outputs/tracking/camera-data/AV_T_WE_3_r140/tracks.json",
+   "track_id": [
+    "8",
+    "12"
+   ],
+   "identified_from": "manual pick from label_tracks_on_frame.py --run r140 frames 60 and 90, image only: dark sedan with white roof plate driving away; the tracker split it into track 8 (frames 58-66) and track 12 (68-114)"
+  }
+ ],
+ "note": "140.8 m checkpoint run on the lab GPU (CUDA). Detection dirs *_r140."
+}

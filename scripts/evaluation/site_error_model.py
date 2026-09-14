@@ -116,7 +116,11 @@ def gps_at(gps, t):
 
 def load_track(path, track_id=None):
     d = json.load(open(path))
-    st = d["states"] if "states" in d else d["tracks"][str(track_id)]
+    if "states" in d:
+        st = d["states"]
+    else:   # one id, or a list of ids when the tracker split the target's track
+        ids = track_id if isinstance(track_id, list) else [track_id]
+        st = sorted((s for i in ids for s in d["tracks"][str(i)]), key=lambda s: s["frame"])
     fr = np.array([s["frame"] for s in st], float)
     xy = np.array([[s["x"], s["y"]] for s in st], float)
     yaw = np.array([s["yaw"] for s in st], float)
@@ -349,7 +353,8 @@ def load_clips(cfg):
         gps = load_gps(ROOT / "Camera data" / f"{c['name']}_trajectory.csv",
                        cfg["lat0"], cfg["lon0"])
         fx = None
-        cal = ROOT / f"outputs/object_detection/camera-data/{c['name']}_phase1/calibration_used.json"
+        run = c["track"].split("/")[-2].replace(c["name"] + "_", "", 1)   # e.g. phase1, r140
+        cal = ROOT / f"outputs/object_detection/camera-data/{c['name']}_{run}/calibration_used.json"
         if cal.exists():
             fx = float(json.load(open(cal))["K"][0][0])
         fr, xy, yaw, coasted = load_track(ROOT / c["track"], c.get("track_id"))
