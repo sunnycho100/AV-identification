@@ -52,9 +52,14 @@ def to_dair_ground(lidar2cam):
     return out
 
 
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
 def run_frame(model, image_path, K, lidar2cam):
     img_tensor, mats_dict, img_meta = build_mats_dict(
         str(image_path), K, lidar2cam, final_dim, img_conf)
+    img_tensor = img_tensor.to(DEVICE)
+    mats_dict = {k: v.to(DEVICE) if torch.is_tensor(v) else v for k, v in mats_dict.items()}
     img_meta["box_type_3d"] = LiDARInstance3DBoxes
     with torch.no_grad():
         preds = model(img_tensor, mats_dict)
@@ -117,8 +122,9 @@ def main():
 
     model = build_model()
     info = load_checkpoint(model, CKPT_PATH)
+    model.to(DEVICE)
     print(f"checkpoint loaded: {info['matched']} keys matched, "
-          f"{len(info['missing'])} missing")
+          f"{len(info['missing'])} missing; device {DEVICE}")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
