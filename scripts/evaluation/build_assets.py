@@ -38,7 +38,8 @@ def headline(name, frame, run="r140"):
     c = by[name]; dt = T1["dt_s"][name]
     det = ROOT / f"outputs/object_detection/camera-data/{name}_{run}"
     cal = json.load(open(det / "calibration_used.json")); K, l2c = np.array(cal["K"]), np.array(cal["lidar2cam"])
-    img = cv2.imread(str(det / f"{frame:03d}_annotated.jpg"))
+    alt = OUT / f"frames_{name}_{run}_perpendicular" / f"{frame:03d}.jpg"   # earlier corner convention, if rendered
+    img = cv2.imread(str(alt if alt.exists() else det / f"{frame:03d}_annotated.jpg"))
     i = int(np.argmin(np.abs(c["t"] * 30 - frame)))   # track sample at this frame (30 fps clips)
     z = float(np.median([s for s in [c["q"][i, 0] * 0 - 1.5]]))
     q_cam = c["q"][i]; q_lab = to_cam(c["g"])[i]; q_fix = to_cam(shifted(c, dt)["g"])[i]
@@ -56,7 +57,7 @@ def headline(name, frame, run="r140"):
     for label, (_, col) in pts.items():
         cv2.circle(img, (40, y0), 12, bgr(col), -1); cv2.putText(img, label, (62, y0 + 8), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 4); cv2.putText(img, label, (62, y0 + 8), cv2.FONT_HERSHEY_SIMPLEX, 0.85, bgr(INK), 2); y0 += 36
     cv2.putText(img, f"{name}  frame {frame}  140.8 m checkpoint", (40, 1050), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 4); cv2.putText(img, f"{name}  frame {frame}  140.8 m checkpoint", (40, 1050), cv2.FONT_HERSHEY_SIMPLEX, 0.9, bgr(INK), 2)
-    p = OUT / f"1_gps_in_image_{name}.png"; cv2.imwrite(str(p), cv2.resize(img, (1600, 900))); return p
+    p = OUT / f"1_gps_in_image_{name}{'_perpendicular' if alt.exists() else ''}.png"; cv2.imwrite(str(p), cv2.resize(img, (1600, 900))); return p
 
 a1 = headline("HV_T_EW_1", 190); a1b = headline("AV_T_WE_1", 110)
 
@@ -117,3 +118,46 @@ axes[0].set_ylabel("camera minus GPS (m)")
 fig.suptitle("Held-out error: camera position, bearing and scale taken from the other three clips (140.8 m checkpoint)", x=0.02, ha="left", fontsize=13)
 fig.savefig(OUT / "4_held_out_residual_vs_range.png", dpi=115, facecolor="white", bbox_inches="tight"); plt.close(fig)
 print("\n".join(str(p) for p in sorted(OUT.glob("*.png"))))
+
+# ---------- 6. zoomed trajectory comparison with per-frame error connectors
+from site_error_model import evaluate
+panels = []
+for name in order:
+    c = by[name]; v = T1["partial_leave_one_out"].get(name, {})
+    if "held_out" in v and not v.get("note"):
+        th = fit_shared_dt([o for o in clips if o is not c], False)["theta"]; dt = v["dt_fitted_on_this_clip_s"]; mode = "held out"
+    else:
+        th = theta.copy(); dt = T1["dt_s"][name]; mode = "in-sample (GPS ends too early to hold out)"
+    cs = shifted(c, dt); m = ~cs["invalid"]
+    _, pg = predict(th, cs)
+    g_cam = ((pg - th[:2]) @ rot(th[2])) / th[P_S]          # GPS centre in the camera frame
+    panels.append((name, mode, c["q"][m], g_cam[m], evaluate(th, cs, m)))
+
+fig = plt.figure(figsize=(15, 3.1 * len(panels)))
+gs = fig.add_gridspec(len(panels), 2, width_ratios=[4.2, 1], hspace=0.62, wspace=0.12, top=0.93)
+for r, (name, mode, q, g, ev) in enumerate(panels):
+    ax = fig.add_subplot(gs[r, 0])
+    for a, b in zip(q, g):
+        ax.plot([a[0], b[0]], [a[1], b[1]], color="#9AA5B1", lw=0.8, zorder=1)
+    o = np.argsort(g[:, 0]); ax.plot(g[o, 0], g[o, 1], color=ORANGE, lw=2.2, zorder=2, label="GPS path")
+    ax.scatter(q[:, 0], q[:, 1], s=14, color=BLUE, zorder=3, label="BEVHeight box centre")
+    yc = np.median(g[:, 1]); ax.set_ylim(yc - 2.0, yc + 2.0)
+    ax.set_xlim(min(q[:, 0].min(), g[:, 0].min()) - 3, max(q[:, 0].max(), g[:, 0].max()) + 3)
+    ax.set_ylabel("across road (m)")
+    ax.set_title(f"{name}, {mode}:  rmse {ev['rmse_m']:.2f} m,  along {ev['along_rms_m']:.2f} m,  across {ev['across_rms_m']:.2f} m,  {ev['n']} frames",
+                 fontsize=11.5, loc="left")
+    if r == len(panels) - 1: ax.set_xlabel("range along the road from the camera (m)")
+    if r == 0: ax.legend(loc="upper right", frameon=False, fontsize=10, ncol=2)
+    e = np.linalg.norm(q - g, axis=1) * s_sh                 # per-frame gap in metres
+    hx = fig.add_subplot(gs[r, 1])
+    hx.hist(np.clip(e, 0, 3.5), bins=np.arange(0, 3.7, 0.2), color=BLUE, alpha=0.85, edgecolor="white")
+    med, p95 = np.median(e), np.percentile(e, 95)
+    hx.axvline(med, color=INK, lw=1.3); hx.axvline(p95, color=INK, lw=1.3, ls="--")
+    hx.text(0.97, 0.95, f"median {med:.2f} m\n95% of frames < {p95:.2f} m", transform=hx.transAxes,
+            ha="right", va="top", fontsize=9.5, bbox=dict(facecolor="white", edgecolor="none", alpha=0.9))
+    hx.set_xlim(0, 3.6); hx.set_yticks([]); hx.grid(False)
+    if r == len(panels) - 1: hx.set_xlabel("per-frame position gap (m)")
+fig.suptitle("Camera track against GPS, across-road axis stretched about 5x. Grey lines join each frame's box centre to the GPS position at the same instant.",
+             x=0.02, ha="left", fontsize=13, y=0.975)
+fig.savefig(OUT / "6_trajectory_error_zoom.png", dpi=115, facecolor="white", bbox_inches="tight"); plt.close(fig)
+print(OUT / "6_trajectory_error_zoom.png")
