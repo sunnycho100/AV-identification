@@ -78,23 +78,26 @@ def draw_box(box, yaw, K, lidar2cam, shape=(1080, 1920)):
     return np.clip(img + rng.normal(0.0, 6.0, shape), 0, 255).astype(np.uint8)
 
 
+def sobel(img):
+    return np.stack([cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=3),
+                     cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=3)], -1)
+
+
 def test_recovers_yaw_from_20_deg_off():
     K, lidar2cam = synthetic_camera()
     true_yaw = 0.35
     box = np.array([38.0, -4.0, 0.0, 4.4, 1.8, 1.45, true_yaw])
-    img = draw_box(box, true_yaw, K, lidar2cam)
-    gx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=3)
-    grad = cv2.magnitude(gx, gy)
+    grad = sobel(draw_box(box, true_yaw, K, lidar2cam))
 
     start = box.copy()
     start[6] = true_yaw + math.radians(20.0)
-    yaw, conf = ya.solve_yaw(start, grad, K, lidar2cam)
-    err = abs(math.degrees(ya.sh.fold(yaw - true_yaw)))
-    assert yaw is not None
-    assert err < 3.0, f"recovered {math.degrees(yaw):.2f} deg, {err:.2f} deg off"
-    assert conf > 1.0, conf
-    print(f"recovered within {err:.2f} deg, confidence {conf:.2f}")
+    for objective in ("magnitude", "normal"):
+        yaw, conf = ya.solve_yaw(start, grad, K, lidar2cam, objective=objective)
+        err = abs(math.degrees(ya.sh.fold(yaw - true_yaw)))
+        assert yaw is not None
+        assert err < 3.0, f"{objective}: {err:.2f} deg off"
+        assert conf > 1.0, (objective, conf)
+        print(f"{objective}: recovered within {err:.2f} deg, confidence {conf:.2f}")
 
 
 def test_keeps_the_detection_sign():
@@ -102,10 +105,7 @@ def test_keeps_the_detection_sign():
     K, lidar2cam = synthetic_camera()
     true_yaw = 0.35
     box = np.array([38.0, -4.0, 0.0, 4.4, 1.8, 1.45, true_yaw])
-    img = draw_box(box, true_yaw, K, lidar2cam)
-    gx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=3)
-    grad = cv2.magnitude(gx, gy)
+    grad = sobel(draw_box(box, true_yaw, K, lidar2cam))
 
     flipped = box.copy()
     flipped[6] = true_yaw + math.pi

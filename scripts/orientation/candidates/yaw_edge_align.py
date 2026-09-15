@@ -5,10 +5,16 @@ the one number the roadside domain gap hurts is yaw. So keep the box and re-fit
 that single parameter against the image the detection came from. For each
 detection the box is rotated through the semicircle around its own axis, the 12
 wireframe edges are projected with K and lidar2cam, and each candidate yaw is
-scored by the mean Sobel gradient magnitude sampled along those edges. The four
+scored by the mean Sobel gradient sampled along those edges. The four
 ground-contact edges are weighted `ground_w` because the tire line and the near
 shadow edge are the sharp, unambiguous edges at this camera height; the roof and
 vertical edges smear.
+
+Two objectives. `magnitude` is the recipe's own, the mean gradient magnitude,
+which counts any strong gradient under the edge whatever its direction.
+`normal` is the absolute gradient component perpendicular to the projected edge,
+so a silhouette boundary, whose gradient points across the boundary, scores and
+body texture or a road marking running along the edge does not.
 
 Sign. The sweep is over the axis only, offsets in [-90, +90) degrees around the
 detection's own yaw, so the answer is always within 90 degrees of what BEVHeight
@@ -30,17 +36,22 @@ confidence is 1.03, so the score curve is essentially flat and the argmax is
 noise; the chosen offset from the raw yaw has a median magnitude of 33 degrees
 inside 40 m. Mean gradient magnitude does not separate a car's silhouette from
 its own body texture and the road markings under it at these box sizes (40 to 90
-px wide). The next thing to try is the gradient component perpendicular to each
-edge instead of the magnitude, which is a different objective, not a tuning of
-this one.
+px wide). `objective=normal` was added to test exactly that and it does not
+rescue the method: 8.884 to 16.356 degrees, still worse in every bin, still
+median confidence 1.04. Perpendicular gradient is a better objective than
+magnitude, by about 3 degrees of mean median folded error, and the gap to the
+raw detector yaw is far larger than the gap between the two objectives. The
+projected box is 40 to 90 px wide here and nothing at that scale separates the
+silhouette from the clutter under it, so the next thing worth trying is a
+segmentation mask, not another edge score.
 
 Corners follow evaluators.result2kitti.get_lidar_3d_8points exactly (bottom face
 0-3 at z, top face 4-7 at z + h, x along l, y along w), built inline and
 vectorised over the yaw sweep; that module is not importable here because it
 pulls in numba. The test asserts the two agree.
 
-    cfg: step_deg (2), ground_w (3), min_conf (1.0, off), max_range (1e9, off),
-         samples (20 points per edge)
+    cfg: objective (magnitude or normal), step_deg (2), ground_w (3),
+         min_conf (1.0, off), max_range (1e9, off), samples (20 points per edge)
 """
 import json
 import sys
@@ -55,6 +66,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "evaluation"))
 
 import score_heading as sh
 
+OBJECTIVE = "magnitude"
 STEP_DEG = 2.0
 GROUND_W = 3.0
 MIN_CONF = 1.0
@@ -116,11 +128,13 @@ def corners(box, yaws):
                      np.broadcast_to(p[:, 2] + z, (len(yaws), 8))], axis=-1)
 
 
-def edge_scores(box, yaws, grad, K, lidar2cam, samples=SAMPLES):
-    """Mean gradient magnitude along each projected edge, (A, 12), or None.
+def edge_scores(box, yaws, grad, K, lidar2cam, samples=SAMPLES,
+                objective=OBJECTIVE):
+    """Mean gradient response along each projected edge, (A, 12), or None.
 
-    None when any corner falls behind the camera at any yaw: the projection is
-    meaningless there and the caller falls back to the raw yaw.
+    `grad` is (H, W, 2), the Sobel gx and gy. None when any corner falls behind
+    the camera at any yaw: the projection is meaningless there and the caller
+    falls back to the raw yaw.
     """
     pts = corners(box, yaws)
     cam = pts @ lidar2cam[:3, :3].T + lidar2cam[:3, 3]
@@ -131,18 +145,27 @@ def edge_scores(box, yaws, grad, K, lidar2cam, samples=SAMPLES):
     a, b = uv[:, EDGES[:, 0]], uv[:, EDGES[:, 1]]
     t = np.linspace(0.0, 1.0, samples)[None, None, :, None]
     p = a[:, :, None, :] + (b - a)[:, :, None, :] * t
-    h, w = grad.shape
+    h, w = grad.shape[:2]
     # ponytail: nearest-pixel sampling, bilinear buys nothing on a blurred
     # gradient field; swap it in if sub-pixel edges ever matter
     u = np.rint(p[..., 0]).astype(int)
     v = np.rint(p[..., 1]).astype(int)
     ok = (u >= 0) & (u < w) & (v >= 0) & (v < h)
-    g = grad[np.clip(v, 0, h - 1), np.clip(u, 0, w - 1)] * ok
-    return g.sum(-1) / np.maximum(ok.sum(-1), 1)
+    g = grad[np.clip(v, 0, h - 1), np.clip(u, 0, w - 1)]
+    if objective == "normal":
+        d = b - a
+        n = np.stack([-d[..., 1], d[..., 0]], -1) / np.maximum(
+            np.linalg.norm(d, axis=-1, keepdims=True), 1e-9)
+        val = np.abs((g * n[:, :, None, :]).sum(-1))
+    elif objective == "magnitude":
+        val = np.hypot(g[..., 0], g[..., 1])
+    else:
+        raise ValueError(f"objective must be magnitude or normal, not {objective!r}")
+    return (val * ok).sum(-1) / np.maximum(ok.sum(-1), 1)
 
 
 def solve_yaw(box, grad, K, lidar2cam, step_deg=STEP_DEG, ground_w=GROUND_W,
-              samples=SAMPLES):
+              samples=SAMPLES, objective=OBJECTIVE):
     """(yaw, confidence) for one box, or (None, 0.0) if it cannot be projected.
 
     The sweep is the semicircle around the box's own yaw, so the returned angle
@@ -150,7 +173,7 @@ def solve_yaw(box, grad, K, lidar2cam, step_deg=STEP_DEG, ground_w=GROUND_W,
     """
     offsets = np.deg2rad(np.arange(-90.0, 90.0, step_deg))
     yaw0 = float(box[6])
-    scores = edge_scores(box, yaw0 + offsets, grad, K, lidar2cam, samples)
+    scores = edge_scores(box, yaw0 + offsets, grad, K, lidar2cam, samples, objective)
     if scores is None:
         return None, 0.0
     weight = np.where(np.arange(len(EDGES)) < N_GROUND, ground_w, 1.0)
@@ -171,7 +194,7 @@ def solve_yaw(box, grad, K, lidar2cam, step_deg=STEP_DEG, ground_w=GROUND_W,
 
 @lru_cache(maxsize=2)
 def frame_grad(clip, frame):
-    """Sobel gradient magnitude of one frame, or None when the frame is missing.
+    """(H, W, 2) Sobel gx and gy of one frame, or None when the frame is missing.
 
     Cached at size 2 only: states are visited frame by frame, and a full clip of
     float32 gradients would be gigabytes.
@@ -180,12 +203,12 @@ def frame_grad(clip, frame):
     img = cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)
     if img is None:
         return None
-    gx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=3)
-    return cv2.magnitude(gx, gy)
+    return np.stack([cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=3),
+                     cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=3)], -1)
 
 
 def run(clip, det_dir, tracks, cfg):
+    objective = str(cfg.get("objective", OBJECTIVE))
     step_deg = float(cfg.get("step_deg", STEP_DEG))
     ground_w = float(cfg.get("ground_w", GROUND_W))
     min_conf = float(cfg.get("min_conf", MIN_CONF))
@@ -217,7 +240,8 @@ def run(clip, det_dir, tracks, cfg):
             if box[0] > max_range:
                 n_far += 1
                 continue
-            yaw, conf = solve_yaw(box, grad, K, lidar2cam, step_deg, ground_w, samples)
+            yaw, conf = solve_yaw(box, grad, K, lidar2cam, step_deg, ground_w,
+                                  samples, objective)
             if yaw is None:
                 n_unprojectable += 1
                 continue
@@ -227,7 +251,7 @@ def run(clip, det_dir, tracks, cfg):
                 continue
             out[tid][frame] = yaw
     kept = sum(len(v) for v in out.values())
-    print(f"  {clip}: {kept}/{n_state} states re-solved, "
+    print(f"  {clip} [{objective}]: {kept}/{n_state} states re-solved, "
           f"{n_far} past max_range, {n_lowconf} under min_conf, "
           f"{n_unprojectable} unprojectable, "
           f"median conf {np.median(confs) if confs else float('nan'):.3f}")
