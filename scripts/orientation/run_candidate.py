@@ -37,8 +37,11 @@ sys.path.insert(0, str(ROOT / "scripts" / "evaluation"))
 
 import score_heading as sh
 
+# ponytail: the two W clips score only 123 and 91 frames under a poorly conditioned
+# v2 extrinsic (8.95 and 9.19 m solved height, per-frame scatter 8 to 18 m), so they
+# are excluded from the keep rule until their site calibration is redone.
 CLIPS = ("AV_T_EW_3", "HV_T_EW_1", "AV_T_WE_1", "AV_T_WE_3", "HV_T_EW_2",
-         "AV_V_WE_3", "AV_W_WE_1", "AV_W_WE_3")
+         "AV_V_WE_3")
 CANDIDATE_DIR = Path(__file__).resolve().parent / "candidates"
 FORBIDDEN = ("Camera data", "trajectory.csv")
 LEDGER_COLUMNS = ["date", "candidate", "cfg", "cfg_hash", "clips",
