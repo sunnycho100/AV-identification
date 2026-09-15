@@ -25,7 +25,7 @@ import run_candidate as rc
 import score_heading as sh
 
 
-def fake_clip(root, clip="FAKE", yaws=None, n=24):
+def fake_clip(root, clip="FAKE", yaws=None, n=24, suffix="phase1"):
     """A tiny outputs tree: one tracks.json and one <frame>_pred.json per frame.
 
     The track walks along +x at one metre per frame with a constant true yaw of
@@ -36,8 +36,8 @@ def fake_clip(root, clip="FAKE", yaws=None, n=24):
     track = [{"frame": i, "x": 10.0 + i, "y": 0.0, "z": -1.4, "yaw": 0.0,
               "vx": 30.0 + 0.01 * i, "vy": 0.0, "score": 0.5 + 0.001 * i}
              for i in range(n)]
-    t_dir = Path(root) / "outputs/tracking/camera-data" / f"{clip}_phase1"
-    d_dir = Path(root) / "outputs/object_detection/camera-data" / f"{clip}_phase1"
+    t_dir = Path(root) / "outputs/tracking/camera-data" / f"{clip}_{suffix}"
+    d_dir = Path(root) / "outputs/object_detection/camera-data" / f"{clip}_{suffix}"
     t_dir.mkdir(parents=True)
     d_dir.mkdir(parents=True)
     (t_dir / "tracks.json").write_text(json.dumps({"meta": {}, "tracks": {"1": track}}))
@@ -46,6 +46,29 @@ def fake_clip(root, clip="FAKE", yaws=None, n=24):
             [{"class_name": "car", "score": 0.5, "x": s["x"], "y": s["y"], "z": -1.4,
               "l": 4.3, "w": 1.8, "h": 1.4, "yaw": y}]))
     return track, d_dir
+
+
+def test_suffix_scores_the_rerun_on_the_shared_clip_subset():
+    """cfg suffix points the candidate at a rerun; a clip with no rerun is dropped
+    from both sides, and the rerun's own yaws are what gets scored."""
+    with tempfile.TemporaryDirectory() as root:
+        noisy = [0.4 * (-1) ** i for i in range(24)]
+        fake_clip(root, clip="BOTH", yaws=noisy)
+        fake_clip(root, clip="BOTH", yaws=[0.0] * 24, suffix="alt")
+        fake_clip(root, clip="ONLYBASE", yaws=noisy)
+
+        base = rc.collect_clips(root=root, clips=["BOTH", "ONLYBASE"])
+        alt = rc.collect_clips(root=root, clips=["BOTH", "ONLYBASE"], suffix="alt")
+        assert [c for c, _, _ in base] == ["BOTH", "ONLYBASE"], base
+        assert [c for c, _, _ in alt] == ["BOTH"], alt
+        assert alt[0][2].name == "BOTH_alt", alt[0][2]
+
+        shared = [f for f in base if f[0] == "BOTH"]
+        yaws = rc.run_all(rc.load_candidate("bn_stats_recalib"), alt, {})
+        before = rc.score(shared)["mean_median_folded_deg"]
+        after = rc.score(alt, yaws)["mean_median_folded_deg"]
+    assert abs(before - np.degrees(0.4)) < 1e-6, before
+    assert after < 1e-6, after
 
 
 def test_identity_equals_baseline():

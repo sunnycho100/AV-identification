@@ -13,6 +13,12 @@ A candidate is a module in candidates/ exposing
 
 Frame keys may come back as ints or strings; score_heading takes both.
 
+`--cfg suffix=<tag>` scores the candidate against an alternative detection and
+tracking run, `outputs/*/camera-data/<clip>_<tag>/`, instead of `_phase1`. That
+is how a candidate that reruns the detector (a recalibrated checkpoint, a
+different checkpoint) is graded: clips with no such rerun are dropped from both
+sides, so the baseline is always computed on the clips actually compared.
+
 GPS is held out from candidates, not only from the score. Two guards: the
 runner grep-refuses a candidate file that mentions "Camera data" or
 "trajectory.csv", and it exports ORIENTATION_NO_GPS=1 so a candidate that does
@@ -37,11 +43,16 @@ sys.path.insert(0, str(ROOT / "scripts" / "evaluation"))
 
 import score_heading as sh
 
-# ponytail: the two W clips score only 123 and 91 frames under a poorly conditioned
-# v2 extrinsic (8.95 and 9.19 m solved height, per-frame scatter 8 to 18 m), so they
-# are excluded from the keep rule until their site calibration is redone.
-CLIPS = ("AV_T_EW_3", "HV_T_EW_1", "AV_T_WE_1", "AV_T_WE_3", "HV_T_EW_2",
-         "AV_V_WE_3")
+# The keep rule runs on the Todd Drive clips, which share one verified site
+# calibration. The V and W clips have only a per-clip v2 extrinsic (W heights solved
+# at 8.95 and 9.19 m with 8 to 18 m scatter; V dominated by off-plane overpass
+# traffic), so they are scored and printed as watch clips but do not decide.
+CLIPS = ("AV_T_EW_3", "HV_T_EW_1", "AV_T_WE_1", "AV_T_WE_3", "HV_T_EW_2")
+WATCH = ("AV_V_WE_3", "AV_W_WE_1", "AV_W_WE_3")
+# A detection rerun that loses frames can improve the mean by dropping hard cases
+# (the virtual camera candidate did). Reject if the scored frames fall below this
+# fraction of the baseline's on the same clips.
+MIN_FRAME_RATIO = 0.9
 CANDIDATE_DIR = Path(__file__).resolve().parent / "candidates"
 FORBIDDEN = ("Camera data", "trajectory.csv")
 LEDGER_COLUMNS = ["date", "candidate", "cfg", "cfg_hash", "clips",
@@ -50,12 +61,17 @@ LEDGER_COLUMNS = ["date", "candidate", "cfg", "cfg_hash", "clips",
                   "kept", "reason", "git_commit"]
 
 
-def collect_clips(root=ROOT, clips=CLIPS):
-    """[(clip, tracks_path, det_dir)] for the clips whose tracks.json exists."""
+def collect_clips(root=ROOT, clips=CLIPS, suffix="phase1"):
+    """[(clip, tracks_path, det_dir)] for the clips whose tracks.json exists.
+
+    suffix names the detection and tracking run: "phase1" is the graded baseline,
+    anything else (e.g. "bnrecal", "r140") is an alternative rerun of the same
+    clips that a candidate can be scored against.
+    """
     found = []
     for clip in clips:
-        tracks = Path(root) / "outputs/tracking/camera-data" / f"{clip}_phase1" / "tracks.json"
-        det = Path(root) / "outputs/object_detection/camera-data" / f"{clip}_phase1"
+        tracks = Path(root) / "outputs/tracking/camera-data" / f"{clip}_{suffix}" / "tracks.json"
+        det = Path(root) / "outputs/object_detection/camera-data" / f"{clip}_{suffix}"
         if tracks.exists():
             found.append((clip, tracks, det))
     return found
@@ -172,13 +188,40 @@ def main():
     missing = [c for c in args.clips if c not in {f[0] for f in found}]
     if missing:
         print(f"skipped (no tracks.json): {', '.join(missing)}")
+
+    # cfg suffix points the candidate at an alternative detection and tracking run
+    # (a rerun with a different checkpoint). The baseline is then recomputed on the
+    # clips that rerun covers, so both sides of the keep rule see the same subset.
+    found_cand = found
+    suffix = str(cfg["suffix"]) if "suffix" in cfg else None
+    if suffix:
+        found_cand = collect_clips(clips=args.clips, suffix=suffix)
+        have = {c for c, _, _ in found_cand}
+        no_rerun = [c for c, _, _ in found if c not in have]
+        if no_rerun:
+            print(f"skipped (no _{suffix} run): {', '.join(no_rerun)}")
+        found = [f for f in found if f[0] in have]
+        found_cand = [f for f in found_cand if f[0] in {c for c, _, _ in found}]
+        if not found:
+            raise SystemExit(f"no clip has both a phase1 and a _{suffix} run")
     print(f"clips: {', '.join(c for c, _, _ in found)}")
 
     module = load_candidate(args.name)
     base = score(found)
-    yaws = run_all(module, found, cfg)
-    cand = score(found, yaws)
+    yaws = run_all(module, found_cand, cfg)
+    cand = score(found_cand, yaws)
     kept, reason = sh.keep_decision(base, cand)
+    n_base = sum(v["n"] for v in base["per_clip"].values())
+    n_cand = sum(v["n"] for v in cand["per_clip"].values())
+    if kept and n_cand < MIN_FRAME_RATIO * n_base:
+        kept, reason = False, f"scored frames fell {n_base} to {n_cand}, under {MIN_FRAME_RATIO:.0%} of baseline"
+
+    # watch clips: scored and printed, never part of the decision
+    watch = [f for f in collect_clips(clips=WATCH, suffix=suffix or "phase1")
+             if not suffix or (ROOT / "outputs/tracking/camera-data" / f"{f[0]}_phase1" / "tracks.json").exists()]
+    if watch:
+        watch_base = score(collect_clips(clips=[f[0] for f in watch]))
+        watch_cand = score(watch, run_all(module, watch, cfg))
 
     h = cfg_hash(cfg)
     out_dir = ROOT / "outputs/orientation/runs" / (f"{args.name}_{h}" if h else args.name)
@@ -203,6 +246,13 @@ def main():
         "git_commit": git_commit()})
 
     print_table(base, cand, kept, reason)
+    if watch:
+        print("watch clips (not in the decision):")
+        for clip, b in watch_base["per_clip"].items():
+            c = watch_cand["per_clip"][clip]
+            print(f"{clip:<12}{b['median_folded_deg']:>10.3f}{c['median_folded_deg']:>11.3f}"
+                  f"{c['median_folded_deg'] - b['median_folded_deg']:>+9.3f}"
+                  f"   flip {b['frac_raw_gt90']:.3f} to {c['frac_raw_gt90']:.3f}")
     print(f"wrote {out_dir}")
 
 
