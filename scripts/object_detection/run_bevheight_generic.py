@@ -13,6 +13,7 @@ Smoke test (Camera data clip AV_T_WE_1, mock extrinsic):
         --out-dir outputs/object_detection/camera-data/AV_T_WE_1
 """
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -26,12 +27,27 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from evaluators.result2kitti import get_lidar_3d_8points
+from models.bev_height import BEVHeight
 from scripts.adapter.calib_to_bevheight_input import (
     build_mats_dict, load_K_from_anycalib, load_extrinsic_json)
 from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 from scripts.object_detection.run_bevheight_single import (
-    CKPT_PATH, SCORE_THRESH, build_model, filter_and_pack, final_dim,
-    img_conf, load_checkpoint)
+    CKPT_PATH, SCORE_THRESH, filter_and_pack, load_checkpoint)
+
+DEFAULT_CONFIG = ROOT / "experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py"
+
+
+def load_exp(path):
+    """The experiment module, so the model is built to match the checkpoint.
+
+    Rope3D's config differs from DAIR's in d_bound ([-1.5, 3.0, 180] against
+    [-2.0, 0.0, 90]), which changes the height head to 180 channels. Its
+    checkpoint only loads against its own config.
+    """
+    spec = importlib.util.spec_from_file_location("bev_exp_cfg", str(path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 # BEVHeight was trained on DAIR, whose virtuallidar frame puts the road surface
 # at z = -1.73, not 0 (GT car bottoms median -1.73 over 300 frames). The height
@@ -68,9 +84,9 @@ if DEVICE == "cuda":
     torch.inverse = _cpu_inverse
 
 
-def run_frame(model, image_path, K, lidar2cam):
+def run_frame(model, image_path, K, lidar2cam, exp):
     img_tensor, mats_dict, img_meta = build_mats_dict(
-        str(image_path), K, lidar2cam, final_dim, img_conf)
+        str(image_path), K, lidar2cam, exp.final_dim, exp.img_conf)
     img_tensor = img_tensor.to(DEVICE)
     mats_dict = {k: v.to(DEVICE) if torch.is_tensor(v) else v for k, v in mats_dict.items()}
     img_meta["box_type_3d"] = LiDARInstance3DBoxes
@@ -80,7 +96,10 @@ def run_frame(model, image_path, K, lidar2cam):
     boxes = results[0][0].tensor.cpu().numpy()
     scores = results[0][1].cpu().numpy()
     labels = results[0][2].cpu().numpy()
-    return filter_and_pack(boxes, scores, labels)
+    preds = filter_and_pack(boxes, scores, labels)
+    for det in preds:  # name classes from the config actually in use
+        det["class_name"] = exp.CLASSES[det["class_id"]]
+    return preds
 
 
 def render_annotated(image_path, preds, K, lidar2cam, out_path):
@@ -113,6 +132,11 @@ def main():
     ap.add_argument("--anycalib-json", required=True)
     ap.add_argument("--extrinsic-json", required=True)
     ap.add_argument("--out-dir", required=True)
+    ap.add_argument("--ckpt", default=str(CKPT_PATH),
+                    help="checkpoint to load (default: the DAIR 102.4 m one)")
+    ap.add_argument("--config", default=str(DEFAULT_CONFIG),
+                    help="experiment config whose model definition matches --ckpt "
+                         "(e.g. experiments/rope3d/bev_height_lss_r50_864_1536_128x128_102.py)")
     ap.add_argument("--limit", type=int, default=None, help="max frames to process")
     ap.add_argument("--no-ground-shift", action="store_true",
                     help="feed the extrinsic as-is; use for extrinsics that "
@@ -133,18 +157,27 @@ def main():
         print(f"ego origin raised {-DAIR_GROUND_Z} m: road now at z={DAIR_GROUND_Z} "
               f"(DAIR training convention)")
 
-    model = build_model()
-    info = load_checkpoint(model, CKPT_PATH)
+    exp = load_exp(args.config)
+    model = BEVHeight(exp.backbone_conf, exp.head_conf)
+    model.eval()
+    ckpt_path = Path(args.ckpt)
+    info = load_checkpoint(model, ckpt_path)
     model.to(DEVICE)
+    print(f"config {Path(args.config).name}: d_bound {exp.backbone_conf['d_bound']}")
     print(f"checkpoint loaded: {info['matched']} keys matched, "
-          f"{len(info['missing'])} missing; device {DEVICE}")
+          f"{len(info['missing'])} missing, {len(info['unexpected'])} unexpected; "
+          f"device {DEVICE}")
+    for tag in ("missing", "unexpected"):
+        if info[tag]:
+            print(f"  {tag}: {info[tag]}")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     # the per-frame files stay a bare list of detections (run_ab3dmot reads them
     # that way), so provenance goes in a sidecar
     (out_dir / "calibration_used.json").write_text(json.dumps({
-        "checkpoint": CKPT_PATH.name,
+        "checkpoint": ckpt_path.name,
+        "config": str(args.config),
         "anycalib_json": str(args.anycalib_json),
         "extrinsic_json": str(args.extrinsic_json),
         "ground_shift_applied_m": 0.0 if args.no_ground_shift else -DAIR_GROUND_Z,
@@ -152,7 +185,7 @@ def main():
         "K": K.tolist(), "lidar2cam": lidar2cam.tolist(),
     }, indent=2))
     for f in frames:
-        preds = run_frame(model, f, K, lidar2cam)
+        preds = run_frame(model, f, K, lidar2cam, exp)
         (out_dir / f"{f.stem}_pred.json").write_text(json.dumps(preds, indent=2))
         render_annotated(f, preds, K, lidar2cam, out_dir / f"{f.stem}_annotated.jpg")
         cars = [d for d in preds if d["class_name"] == "car"]
