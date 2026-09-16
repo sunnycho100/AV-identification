@@ -71,7 +71,7 @@ def test_tracker_yaw_is_untouched():
 
 
 def test_every_state_gets_the_new_fields():
-    """Including the three frames with no detection, which come back null."""
+    """The three frames with no detection keep a heading, carried in and flagged."""
     dropped = (5, 6, 7)
     with tempfile.TemporaryDirectory() as root:
         doc, states = run(root, np.pi, drop_dets=dropped)
@@ -80,7 +80,8 @@ def test_every_state_gets_the_new_fields():
     for s in states:
         want_null = s["frame"] in dropped
         assert (s["yaw_det"] is None) == want_null, s
-        assert (s["yaw_refined"] is None) == want_null, s
+        assert s["yaw_refined"] is not None, s
+        assert s["yaw_filled"] == want_null, s
     assert doc["meta"]["tag"] == "synthetic", doc["meta"]
     assert doc["meta"]["yaw_refined"]["window"] == 31, doc["meta"]["yaw_refined"]
     assert doc["meta"]["yaw_refined"]["score_pow"] == 2, doc["meta"]["yaw_refined"]
@@ -113,3 +114,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_gaps_are_filled_and_flagged():
+    """A state with no matched detection takes its neighbour's heading, flagged."""
+    states = [{"frame": 0, "yaw_refined": 0.5, "yaw_filled": False},
+              {"frame": 1, "yaw_refined": None, "yaw_filled": False},
+              {"frame": 2, "yaw_refined": None, "yaw_filled": False},
+              {"frame": 3, "yaw_refined": 1.5, "yaw_filled": False}]
+    refine_yaw.fill_gaps(states)
+    assert [s["yaw_refined"] for s in states] == [0.5, 0.5, 1.5, 1.5], states
+    assert [s["yaw_filled"] for s in states] == [False, True, True, False], states
+    none_matched = [{"frame": 0, "yaw_refined": None, "yaw_filled": False}]
+    refine_yaw.fill_gaps(none_matched)
+    assert none_matched[0]["yaw_refined"] is None
