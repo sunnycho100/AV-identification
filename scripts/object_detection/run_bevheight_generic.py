@@ -5,6 +5,14 @@ and a generic extrinsic JSON ({"rotation": 3x3, "translation": [3]},
 ground-frame -> camera). Reuses the model/config/render code from
 run_bevheight_single.py.
 
+The pipeline default is the 140.8 m DAIR checkpoint at score >= 0.45. Its BEV
+grid reaches the far end of this footage, where the 102.4 m one runs out of
+range and starts placing boxes on empty pavement; at the same threshold it
+finds about a third more cars per frame (7.0 against 5.1 on the five Todd Drive
+clips) and a sixth as many pedestrian and bicycle false positives on the
+freeway. --ckpt and --config together still reach the 102.4 m checkpoint
+(bev_height_lss_r50_864_1536_128x128_102.py) and Rope3D.
+
 Smoke test (Camera data clip AV_T_WE_1, mock extrinsic):
     .venv/bin/python scripts/object_detection/run_bevheight_generic.py \
         --frames-dir data/camera-data/AV_T_WE_1/frames \
@@ -32,9 +40,10 @@ from scripts.adapter.calib_to_bevheight_input import (
     build_mats_dict, load_K_from_anycalib, load_extrinsic_json)
 from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 from scripts.object_detection.run_bevheight_single import (
-    CKPT_PATH, SCORE_THRESH, filter_and_pack, load_checkpoint)
+    SCORE_THRESH, filter_and_pack, load_checkpoint)
 
-DEFAULT_CONFIG = ROOT / "experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py"
+DEFAULT_CKPT = ROOT / "checkpoints/BEVHeight_R50_128_140.8_75.22_49_epochs.ckpt"
+DEFAULT_CONFIG = ROOT / "experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_140.py"
 
 
 def load_exp(path):
@@ -132,11 +141,12 @@ def main():
     ap.add_argument("--anycalib-json", required=True)
     ap.add_argument("--extrinsic-json", required=True)
     ap.add_argument("--out-dir", required=True)
-    ap.add_argument("--ckpt", default=str(CKPT_PATH),
-                    help="checkpoint to load (default: the DAIR 102.4 m one)")
+    ap.add_argument("--ckpt", default=str(DEFAULT_CKPT),
+                    help="checkpoint to load (default: the DAIR 140.8 m one)")
     ap.add_argument("--config", default=str(DEFAULT_CONFIG),
                     help="experiment config whose model definition matches --ckpt "
-                         "(e.g. experiments/rope3d/bev_height_lss_r50_864_1536_128x128_102.py)")
+                         "(e.g. experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py "
+                         "for the 102.4 m checkpoint)")
     ap.add_argument("--limit", type=int, default=None, help="max frames to process")
     ap.add_argument("--no-ground-shift", action="store_true",
                     help="feed the extrinsic as-is; use for extrinsics that "

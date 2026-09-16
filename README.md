@@ -36,10 +36,10 @@ roadside video
 | BEVHeight detector, Mac CPU port | **Done.** Matches the published DAIR-V2X-I benchmark (Car 3D AP@0.5 moderate 69.4 on a 200-frame subset vs 65.46 published full-set) |
 | Self-calibration (intrinsics + extrinsics, no ground truth) | **Done for the primary site.** Camera height 16.2 to 16.3 m confirmed by four independent estimates within 0.1 m; per-clip rotation from a vanishing-point solver with a pose-consistency gate |
 | Ground-plane convention fix | **Done.** The training data places the road at z = -1.73 m; feeding it at z = 0 put every box 1.6 m underground. Box bottoms now sit within 0.08 to 0.11 m of the road across all five processed clips |
-| 3D detection on WI DOT camera data | **Done for five clips** (1,386 frames, both view directions, two seasons) |
+| 3D detection on WI DOT camera data | **Done for five clips** (1,386 frames, both view directions, two seasons). Pipeline default is the DAIR 140.8 m checkpoint at score 0.45, which finds 7.0 cars per frame against 5.1 for the 102.4 m one |
 | Trajectory extraction (30 Hz MOT) | **Working.** Tracks graded against held-out GPS using an image-only target identification (see below) |
-| Trajectory accuracy vs GPS | Position RMSE **0.90 to 0.99 m** on the instrumented vehicle, identified independently of GPS |
-| Heading (yaw) refinement via self-training | **Pilot complete.** Median heading error 7.9 to 1.7 degrees on a held-out clip, detection rate unchanged |
+| Trajectory accuracy vs GPS | Position RMSE **0.78 to 1.13 m** on the instrumented vehicle, identified independently of GPS. The 140.8 m checkpoint holds the target 47 and 15 frames longer on the two graded clips, so the graded stretch now reaches further out where the depth bias below is larger |
+| Heading (yaw) refinement | **In the pipeline.** Raw median axis error 5.1 degrees, 3.3 degrees after the axis consensus and the sign bit, backward-facing boxes 64% to 0.2%, on five Todd Drive clips scored against track motion. A separate self-training pilot on the detection head reached 7.9 to 1.7 degrees median heading error on a held-out clip with the detection rate unchanged |
 | AV vs human classification | Not started (the research question) |
 
 ---
@@ -66,7 +66,9 @@ python scripts/calibration/site_extrinsic.py \
     --reference outputs/calibration/camera-data/AV_T_WE_1/metric_extrinsic_site.json \
     --out outputs/calibration/camera-data/<CLIP>/metric_extrinsic_site.json
 
-# 3. 3D detection (applies the DAIR ground-plane convention automatically)
+# 3. 3D detection (defaults to the DAIR 140.8 m checkpoint at score 0.45, and
+#    applies the ground-plane convention automatically; --ckpt with a matching
+#    --config reaches the 102.4 m one)
 python scripts/object_detection/run_bevheight_generic.py \
     --frames-dir data/camera-data/<CLIP>/frames_all \
     --anycalib-json outputs/calibration/camera-data/<CLIP>/150_anycalib_pinhole_pinhole.json \
@@ -77,6 +79,11 @@ python scripts/object_detection/run_bevheight_generic.py \
 NUMBA_DISABLE_JIT=1 python scripts/tracking/run_ab3dmot.py --fps 30 --max-age 6 \
     --det-dir outputs/object_detection/camera-data/<CLIP>_phase1 \
     --out-dir  outputs/tracking/camera-data/<CLIP>_phase1
+
+# 4b. refine the heading in place: the axis from a score-weighted 31-frame
+#     consensus of the track's own detection yaws, then one travel-direction
+#     sign bit per track. Adds yaw_refined and yaw_det, leaves yaw alone.
+python scripts/tracking/refine_yaw.py --clip <CLIP>
 
 # 5. identify the instrumented vehicle from its hood marker (image only,
 #    GPS is never read), then grade that pre-selected track against GPS
@@ -118,15 +125,23 @@ use.
 
 ## Known issues under investigation
 
-**Per-frame heading instability.** Box orientation is predicted per frame from
-appearance alone; no temporal information links frames. On this footage roughly
-10% of car boxes deviate more than 45 degrees from the direction of travel
-(measured against track motion over 12,330 detections), concentrated at 40 to
-60 m range. The cameras sit ~16 m above the road with a 59 to 66 degree field
-of view, against ~6 m and 42 degrees in the training data, so orientation is
-read from viewpoints absent from training. Downstream consumers therefore take
-heading from track motion, not from per-frame boxes, and the self-training
-pilot above reduces the per-frame error directly.
+**Per-frame heading instability, which turned out to be a sign collapse.** Box
+orientation is predicted per frame from appearance alone; no temporal
+information links frames. The earlier "roughly 10% over 45 degrees" reading was
+wrong. Measured against track motion over 8,283 detections on the five Todd
+Drive clips, 68% of car boxes are more than 45 degrees off the direction of
+travel and 64% more than 90 degrees, while the median error on the axis alone
+is 5.1 degrees. Almost all of the error is therefore one bit: at this viewpoint
+the detector reports a single absolute heading for both traffic streams, so one
+stream reads correct and the oncoming one reads backwards, and smoothing cannot
+recover it because every detection on a track agrees with every other one. It is
+a viewpoint effect, not a broken head: on DAIR-V2X-I's own frames the pretrained
+weights agree with the ground-truth sign 99% of the time (measured on the 102.4 m
+checkpoint), and the cameras here sit ~16 m above the road with a 59 to 66 degree
+field of view, against ~6 m and 42 degrees in the training data. Heading
+direction is therefore taken from the direction of travel, one bit per track,
+and the axis from a temporal consensus of the track's own detections
+(`scripts/tracking/refine_yaw.py`, step 4b above).
 
 **Range-dependent depth bias.** Graded against GPS, detections read about
 1.2 m too near below 40 m and up to 1 m too far beyond 60 m, with the same
@@ -134,11 +149,11 @@ signature on both graded clips. This is model depth behavior, not calibration:
 swapping the entire extrinsic leaves it unchanged. Addressing it requires
 training the height branch (GPU server; see `docs/server-finetune-setup.md`).
 
-**Duplicate detections.** The circle-NMS distance test compares squared
-distance against the radius parameter, so the effective suppression radius is
-the square root of the configured value (2.0 m for cars). Same-vehicle
-duplicates at ~2.5 m along the viewing ray survive. Transient duplicates do not
-hold tracker IDs, so the trajectory stage is largely unaffected.
+**Duplicate detections.** The circle-NMS distance test compares squared distance
+against the radius parameter, so the effective suppression radius for cars is
+the square root of the configured value, 2.0 m rather than 4 m. The bug is real,
+but at the 0.45 export threshold only 0.1% of car boxes have another car box
+within 2.5 m, so it is not currently worth patching a site-packages file.
 
 ---
 
@@ -169,7 +184,9 @@ committed; see `.gitignore`.
 - **WI DOT roadside clips**: 10-second 1920x1080 clips at 30 Hz from Beltline
   highway cameras, each paired with a GPS trajectory of one instrumented
   vehicle used exclusively for evaluation. Not distributed with this
-  repository.
+  repository. The 102.4 m checkpoint also boxes pedestrians and bicycles on this
+  freeway footage, where there are neither: 1,605 such boxes across the five
+  Todd Drive clips at score 0.45, against 260 for the 140.8 m default.
 
 ## Provenance and credit
 

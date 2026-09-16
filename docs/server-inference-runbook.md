@@ -6,6 +6,11 @@ Target clips: `AV_V_WE_3`, `AV_W_WE_1`, `AV_W_WE_3`.
 Verified 2026-09-15: code, calibration and both checkpoints are on the server,
 and a 3 frame smoke test on GPU 1 produced `NNN_pred.json` in 17 s.
 
+The pipeline default is now `BEVHeight_R50_128_140.8_75.22_49_epochs.ckpt` with
+`experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_140.py`, so the Step 2
+command below needs no `--ckpt` or `--config`. Pass both to reach the 102.4 m
+checkpoint again.
+
 ## Environment
 
 Use the existing env. It is the torch 1.9 / mmcv 1.4 stack that
@@ -31,17 +36,20 @@ nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv
 
 Detection peaks near 3 GB. Prefix every run with `CUDA_VISIBLE_DEVICES=1`.
 
-## Step 0. Extract full rate frames
+## Step 0. Extract full rate frames (on the Mac, then sync up)
 
 `data/camera-data/<CLIP>/frames` holds only 10 sampled frames (every 30th).
-Tracking at 30 fps needs every frame. The source videos are already on the
-server, so extract there:
+Tracking at 30 fps needs every frame. The source videos live only on the Mac
+(`Camera data/` is never synced to the server, it holds the GPS ground truth),
+so extract locally and push the frames:
 
 ```bash
 for CLIP in AV_V_WE_3 AV_W_WE_1 AV_W_WE_3; do
   mkdir -p "data/camera-data/$CLIP/frames_all"
   ffmpeg -nostdin -i "Camera data/$CLIP.mp4" -start_number 0 -q:v 2 \
     "data/camera-data/$CLIP/frames_all/%03d.jpg"
+  rsync -avz "data/camera-data/$CLIP/frames_all/" \
+    "cee:roadside-camera/BEVHeights/data/camera-data/$CLIP/frames_all/"
 done
 ```
 
