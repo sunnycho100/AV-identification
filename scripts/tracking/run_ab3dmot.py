@@ -11,6 +11,7 @@ Env: miniforge 3.12 (numpy/scipy/numba present; filterpy pip-installed).
 Run: /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/tracking/run_ab3dmot.py
 """
 import argparse
+import copy
 import json
 import math
 import sys
@@ -27,12 +28,15 @@ STUBS_DIR = Path(__file__).resolve().parent / "xinshuo_stubs"
 sys.path.insert(0, str(STUBS_DIR))
 sys.path.insert(0, str(AB3DMOT_DIR))
 
+from AB3DMOT_libs.matching import data_association  # noqa: E402
 from AB3DMOT_libs.model import AB3DMOT  # noqa: E402
 
 # --- what to track ---
 TAG = "our_intrinsics"
 DEFAULT_FPS = 12.0  # DAIR-V2X-I 12 Hz; new datasets pass --fps (Camera data clips are 30)
 TRACK_CLASS = "car"   # v0: vehicles only (the AV-vs-human question)
+HIGH_SCORE = 0.45     # the detector's export threshold: anything at least this is a
+                      # normal detection, below it is a ByteTrack-style leftover
 DET_DIR = ROOT / "outputs/object_detection" / TAG
 OUT_DIR = ROOT / "outputs/tracking" / TAG
 
@@ -47,6 +51,57 @@ def build_cfg():
         vis=False,
         affi_pro=False,  # skip affinity post-processing
     )
+
+
+class ByteAB3DMOT(AB3DMOT):
+    """AB3DMOT with ByteTrack's second association pass.
+
+    On this footage 38 percent of track states have no detection within 1.0 m at
+    the 0.45 export threshold, and about 70 percent of those gaps do have one at
+    0.20. Those weak detections are real but not trustworthy enough to start a
+    track on, so they are offered only to the tracks the first pass left
+    unmatched and never reach birth().
+
+    Same order as AB3DMOT.track (predict, associate, update, birth, output) with
+    the second association inserted before birth. Ego motion compensation,
+    visualization and affinity post-processing are off in build_cfg(), so they
+    are not repeated here.
+    """
+
+    def __init__(self, cfg, cat, low_thresh, **kwargs):
+        super().__init__(cfg, cat, **kwargs)
+        self.low_thresh = low_thresh
+
+    def track(self, dets_all, frame, seq_name):
+        dets, info = dets_all["dets"], dets_all["info"]
+        self.frame_count += 1
+        self.id_past_output = copy.copy(self.id_now_output)
+        self.id_past = [trk.id for trk in self.trackers]
+
+        score = info[:, 0] if len(info) else np.zeros(0)
+        high = score >= HIGH_SCORE
+        low = (score >= self.low_thresh) & ~high
+        dets_high = self.process_dets(dets[high])
+        trks = self.prediction()
+        matched, unmatched_dets, unmatched_trks, _, _ = data_association(
+            dets_high, trks, self.metric, self.thres, self.algm)
+        self.update(matched, unmatched_trks, dets_high, info[high])
+
+        if low.any() and len(unmatched_trks):
+            dets_low = self.process_dets(dets[low])
+            m, _, _, _, _ = data_association(
+                dets_low, [trks[t] for t in unmatched_trks],
+                self.metric, self.thres, self.algm)
+            # association ran on a subset of the tracks, so map back to self.trackers
+            m = np.array([(d, unmatched_trks[t]) for d, t in m], dtype=int).reshape(-1, 2)
+            rest = [t for t in range(len(self.trackers)) if t not in set(m[:, 1])]
+            self.update(m, rest, dets_low, info[low])
+
+        self.birth(dets_high, info[high], unmatched_dets)   # low scores never start a track
+        results = self.output()
+        results = [np.concatenate(results)] if results else [np.empty((0, 15))]
+        self.id_now_output = results[0][:, 7].tolist()
+        return results, None
 
 
 def load_frame_dets(frame_id, path=None):
@@ -65,6 +120,37 @@ def load_frame_dets(frame_id, path=None):
     return np.array(dets, dtype=float), np.array(info, dtype=float)
 
 
+def track_frames(tracker, frame_ids, load, frame_rate_hz):
+    """{track_id: [per-frame state]} from feeding every frame through the tracker.
+
+    load(frame) -> (dets Nx7, info Nx1).
+    """
+    trajectories = {}
+    for frame in frame_ids:
+        dets, info = load(frame)
+        results, _ = tracker.track({"dets": dets, "info": info}, frame, TAG)
+        arr = results[0]  # rows: [h,w,l,x,y,z,theta, ID, score]
+
+        # per-frame velocity lives in the live Kalman state, not in the output array
+        vmap = {int(t.id): np.asarray(t.get_velocity()).reshape(-1) for t in tracker.trackers}
+
+        for row in arr:
+            tid = int(row[7])
+            x, y, z = float(row[3]), float(row[4]), float(row[5])
+            score = float(row[8]) if row.shape[0] > 8 else None
+            vx, vy, vz = (vmap.get(tid, [math.nan] * 3))[:3]
+            trajectories.setdefault(tid, []).append({
+                "frame": frame,
+                "x": x, "y": y, "z": z,
+                "yaw": float(row[6]),
+                # velocity is meters-per-frame in the Kalman state; *frame_rate_hz for m/s
+                "vx": float(vx), "vy": float(vy), "vz": float(vz),
+                "speed_mps": float(math.hypot(vx, vy) * frame_rate_hz),
+                "score": score,
+            })
+    return trajectories
+
+
 def main():
     ap = argparse.ArgumentParser(description="AB3DMOT on BEVHeight detections")
     ap.add_argument("--start", type=int, default=None, help="first frame index (inclusive)")
@@ -77,6 +163,10 @@ def main():
                     help="detections dir (default: outputs/object_detection/<TAG>)")
     ap.add_argument("--out-dir", default=None,
                     help="output dir (default: outputs/tracking/<TAG>)")
+    ap.add_argument("--low-thresh", type=float, default=None,
+                    help=f"turn on two-stage association: detections scoring "
+                         f"[this, {HIGH_SCORE}) may continue an existing track but "
+                         "never start one (default off)")
     ap.add_argument("--max-age", type=int, default=None,
                     help="frames a track survives without a match (preset 2 was "
                          "tuned for 10 Hz; try ~6 at 30 Hz)")
@@ -104,39 +194,22 @@ def main():
     print(f"Tracking '{TRACK_CLASS}' over {len(frame_ids)} frames "
           f"({frame_ids[0]:06d}..{frame_ids[-1]:06d}) from {DET_DIR}")
 
-    tracker = AB3DMOT(build_cfg(), cat="Car", ID_init=0)
+    if args.low_thresh is None:
+        tracker = AB3DMOT(build_cfg(), cat="Car", ID_init=0)
+    else:
+        tracker = ByteAB3DMOT(build_cfg(), cat="Car", low_thresh=args.low_thresh, ID_init=0)
     if args.max_age is not None:
         tracker.max_age = args.max_age
 
-    # trajectories[id] = list of per-frame states
-    trajectories = {}
-    for frame in frame_ids:
-        dets, info = load_frame_dets(frame, frame_paths.get(frame))
-        results, _ = tracker.track({"dets": dets, "info": info}, frame, TAG)
-        arr = results[0]  # rows: [h,w,l,x,y,z,theta, ID, score]
-
-        # per-frame velocity lives in the live Kalman state, not in the output array
-        vmap = {int(t.id): np.asarray(t.get_velocity()).reshape(-1) for t in tracker.trackers}
-
-        for row in arr:
-            tid = int(row[7])
-            x, y, z = float(row[3]), float(row[4]), float(row[5])
-            score = float(row[8]) if row.shape[0] > 8 else None
-            vx, vy, vz = (vmap.get(tid, [math.nan] * 3))[:3]
-            trajectories.setdefault(tid, []).append({
-                "frame": frame,
-                "x": x, "y": y, "z": z,
-                "yaw": float(row[6]),
-                # velocity is meters-per-frame in the Kalman state; *frame_rate_hz for m/s
-                "vx": float(vx), "vy": float(vy), "vz": float(vz),
-                "speed_mps": float(math.hypot(vx, vy) * frame_rate_hz),
-                "score": score,
-            })
+    trajectories = track_frames(
+        tracker, frame_ids,
+        lambda f: load_frame_dets(f, frame_paths.get(f)), frame_rate_hz)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "tracks.json"
     out_path.write_text(json.dumps({
         "meta": {"tag": TAG, "frame_rate_hz": frame_rate_hz, "class": TRACK_CLASS,
+                 "low_thresh": args.low_thresh,
                  "frames": [frame_ids[0], frame_ids[-1]], "num_tracks": len(trajectories)},
         "tracks": trajectories,
     }, indent=2))

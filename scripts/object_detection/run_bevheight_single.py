@@ -98,10 +98,10 @@ def run_inference(model: BEVHeight, K: np.ndarray, lidar2cam: np.ndarray) -> tup
     return boxes, scores, labels
 
 
-def filter_and_pack(boxes, scores, labels):
+def filter_and_pack(boxes, scores, labels, score_thresh=SCORE_THRESH):
     kept = []
     for i in range(len(scores)):
-        if scores[i] < SCORE_THRESH:
+        if scores[i] < score_thresh:
             continue
         box = boxes[i]
         x, y, z = box[0], box[1], box[2]
