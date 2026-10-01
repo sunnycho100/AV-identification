@@ -22,10 +22,13 @@ utils/utils_stitcher_cost.py, BSD-3):
     greedily: our clips have at most a few hundred fragments).
 Kept from the paper: the cost, cone weights mx, my and the threshold. Changed:
 metres instead of feet, the noise floors cx, cy set to our measured box noise,
-a 1 s window instead of 15 s, and a hard limit of MAX_SIDE_M on the sideways
-jump across the gap. Without the last two, checked by eye on AV_T_EW_3, the
-cost alone joined different cars across 1.6-2.8 s gaps and a 3 m lane offset;
-the joins on road-masked runs are all under 0.4 s and 1.2 m.
+a 1 s window instead of 15 s, and a limit on the sideways jump across the
+gap of SIDE_NOISE_M + SIDE_SPEED_MPS * gap, i.e. box noise plus a lane change in
+progress (the fastest sideways motion in our smoothed tracks is 1.1 m/s, p95
+0.7 m/s; a lane change inside one track is never affected). Without these,
+checked by eye on AV_T_EW_3, the cost alone joined different cars across
+1.6-2.8 s gaps and a 3 m lane offset, and a 2.6 m jump in 0.33 s (a car in the
+next lane).
 
 Coasted tails are trimmed first (postprocess_tracks.clean does that and the
 smoothing; run it after this).
@@ -46,7 +49,7 @@ sys.path.insert(0, str(ROOT / "scripts/evaluation"))
 from score_heading import coasted   # noqa: E402
 
 TIME_WIN_S = 1.0
-MAX_SIDE_M = 1.5        # half a lane
+SIDE_NOISE_M, SIDE_SPEED_MPS = 0.5, 1.5
 STITCH_THRESH = 3.0
 CX, MX, CY, MY = 0.5, 0.1, 0.6, 0.1    # metres; I-24: 0.2 ft, 0.1, 2 ft, 0.1
 
@@ -71,7 +74,7 @@ def stitch_cost(a, b, fps):
         return 1e6
     xa, ya = np.array([[s["x"], s["y"]] for s in a]).T
     xb, yb = np.array([[s["x"], s["y"]] for s in b]).T
-    if abs(yb[0] - ya[-1]) > MAX_SIDE_M:
+    if abs(yb[0] - ya[-1]) > SIDE_NOISE_M + SIDE_SPEED_MPS * gap:
         return 1e6
     n_a, n_b = min(len(a), int(fps)), min(len(b), int(fps))
     if len(a) >= len(b):        # project a forward
@@ -147,7 +150,7 @@ def main():
     d["tracks"], joined = stitch(d["tracks"], fps)
     after = fragmentation(d["tracks"], fps)
     d["meta"]["stitch"] = {"method": "I-24 MOTION stitch_cost (stitch_tracks.py)", "joined": joined,
-                           "time_win_s": TIME_WIN_S, "max_side_m": MAX_SIDE_M,
+                           "time_win_s": TIME_WIN_S, "side_limit": f"{SIDE_NOISE_M} m + {SIDE_SPEED_MPS} m/s x gap",
                            "thresh": STITCH_THRESH}
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -166,7 +169,11 @@ def _selfcheck():
     out, joined = stitch(tracks, fps)
     assert [(j[0], j[1]) for j in joined] == [("a", "b")], joined
     assert len(out) == 3 and len(out["a"]) == 80, {k: len(v) for k, v in out.items()}
-    print(f"selfcheck ok (gap joined at cost {joined[0][2]}, next lane and oncoming left apart)")
+    # a lane change at 1 m/s through a 20-frame gap is still one car
+    lc = lambda f0, f1: [dict(s, y=-8.0 - 1.0 * max(0, s["frame"] - 30) / fps) for s in car(f0, f1, -8.0)]
+    _, joined = stitch({"e": lc(0, 40), "f": lc(60, 100)}, fps)
+    assert [(j[0], j[1]) for j in joined] == [("e", "f")], joined
+    print("selfcheck ok (gap joined, lane change through a gap joined, next lane and oncoming left apart)")
 
 
 if __name__ == "__main__":
