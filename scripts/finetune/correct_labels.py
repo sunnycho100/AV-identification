@@ -16,6 +16,11 @@ How, image only, no GPS:
      median shift: the bias is close to constant with range.
   4. Labels off the road (road_mask.png from build_road_mask.py) are dropped:
      parked cars, the location banner, snow.
+  5. Labels kept from the model (no usable track) still carry the pretrained
+     model's front, which is backwards for most oncoming cars. Their front is
+     flipped when the track-corrected labels in the same stretch of lane
+     (LANE_DY_M across, LANE_DX_M along, any frame) clearly travel the other
+     way. The axis is kept; only the front changes.
 
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/finetune/correct_labels.py --clip HV_T_EW_1
 writes outputs/finetune/pseudo_labels_v2/<clip>/ (same file layout as v1) with
@@ -37,6 +42,8 @@ import road_mask as rm            # noqa: E402
 SHIFTS_M = np.arange(-3.0, 3.01, 0.1)
 MIN_FITS = 5          # matched frames before a track's own shift is trusted
 MIN_IOU = 0.4         # a fit below this overlap is not a clean match
+LANE_DY_M, LANE_DX_M = 2.0, 20.0
+MIN_LANE_VOTES, MIN_LANE_AGREE = 10, 0.9
 
 
 def ray_dir(b, cam):
@@ -61,6 +68,16 @@ def best_shift(K, M, b, blob, cam):
         scores.append((m & blob).sum() / max((m | blob).sum(), 1))
     k = int(np.argmax(scores))
     return float(SHIFTS_M[k]), float(scores[k])
+
+
+def lane_front(b, moving):
+    """+1 or -1 for the way traffic travels along x where b is, from the
+    track-corrected labels; 0 when there is not enough clear evidence."""
+    near = moving[(np.abs(moving[:, 1] - b["y"]) < LANE_DY_M) & (np.abs(moving[:, 0] - b["x"]) < LANE_DX_M)]
+    if len(near) < MIN_LANE_VOTES:
+        return 0
+    fwd = float(np.mean(np.cos(near[:, 2]) > 0))
+    return 1 if fwd >= MIN_LANE_AGREE else -1 if fwd <= 1 - MIN_LANE_AGREE else 0
 
 
 def one_to_one(labels, img, bg, K, M):
@@ -119,7 +136,9 @@ def main():
     clip_shift = float(np.median(fits))
     track_shift = {t: float(np.median(v)) for t, v in per_track.items() if len(v) >= MIN_FITS}
 
-    n_in = n_out = n_off = 0
+    moving = np.array([[b["x"], b["y"], b["yaw"]] for labs in labels.values() for b in labs
+                       if b.get("yaw_source") == "track_motion"])
+    n_in = n_out = n_off = n_flip = 0
     for stem, labs in labels.items():
         out = []
         for b in labs:
@@ -130,17 +149,25 @@ def main():
             tid = b.get("track_id")
             s, how = (track_shift[tid], "track") if tid in track_shift else (clip_shift, "clip_median")
             d = ray_dir(b, cam)
-            out.append({**b, "x": b["x"] + s * d[0], "y": b["y"] + s * d[1],
-                        "shift_m": s, "pos_source": f"image_{how}"})
+            nb = {**b, "x": b["x"] + s * d[0], "y": b["y"] + s * d[1],
+                  "shift_m": s, "pos_source": f"image_{how}"}
+            if b.get("yaw_source") != "track_motion":
+                lane = lane_front(b, moving)
+                if lane and np.sign(np.cos(b["yaw"])) != lane:
+                    nb["yaw"] = float(np.arctan2(np.sin(b["yaw"] + np.pi), np.cos(b["yaw"] + np.pi)))
+                    nb["yaw_source"] = "model_front_from_lane"
+                    n_flip += 1
+            out.append(nb)
         n_out += len(out)
         (dst / f"{stem}_label.json").write_text(json.dumps(out, indent=2))
     manifest = {"clip": a.clip, "from": str(src.relative_to(ROOT)), "labels_in": n_in, "labels_out": n_out,
-                "dropped_off_road": n_off, "fits": len(fits), "clip_median_shift_m": clip_shift,
+                "dropped_off_road": n_off, "fronts_flipped_from_lane": n_flip, "fits": len(fits), "clip_median_shift_m": clip_shift,
                 "tracks_with_own_shift": len(track_shift),
                 "track_shift_spread_m": float(np.subtract(*np.percentile(list(track_shift.values()), [75, 25])))
                 if track_shift else None,
                 "provenance": "v1 labels; position slid along the line of sight to fit the car outline "
-                              "(background subtraction); off-road labels dropped. GPS not used."}
+                              "(background subtraction); off-road labels dropped; model-kept fronts flipped to match "
+                              "the lane's tracked traffic. GPS not used."}
     (dst / "manifest.json").write_text(json.dumps(manifest, indent=2))
     print(json.dumps(manifest, indent=2))
 
@@ -158,6 +185,9 @@ def _selfcheck():
     label = dict(car, x=car["x"] - d[0], y=car["y"] - d[1])
     s, ov = best_shift(K, M, label, blob, cam)
     assert abs(s - 1.0) <= 0.15 and ov > 0.9, (s, ov)
+    moving = np.array([[60.0 + i, -8.0, np.pi] for i in range(20)])          # oncoming lane
+    assert lane_front({"x": 62.0, "y": -8.5}, moving) == -1
+    assert lane_front({"x": 62.0, "y": -30.0}, moving) == 0                   # no evidence there
     print(f"selfcheck ok (label 1 m too close -> shift {s:+.1f} m, overlap {ov:.2f})")
 
 
