@@ -5,6 +5,11 @@ starting a run. Each check corresponds to a specific failure we already hit
 locally, so a pass here means that failure cannot recur.
 """
 import sys
+from pathlib import Path
+
+# this repo first, as train_finetune.py does: the server env also has an older
+# BEVHeight checkout installed, whose ops/ would otherwise be found first
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import torch
 import torch.nn as nn
 

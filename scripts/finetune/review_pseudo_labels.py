@@ -1,9 +1,10 @@
-"""Render pseudo-labels next to the raw detections so a human can judge them.
+"""Render the pseudo-labels so a human can judge them.
 
-Left: what BEVHeight actually predicted. Right: the label we would train on.
-The point of the split is that the difference between the two panels is exactly
-what fine-tuning would teach, so if the right panel is not visibly better, the
-labels are not worth training on.
+Green: corrected from a good track (heading from motion, z on the road, size
+the track median). Orange: kept as the model predicted it, because the car had
+no trustworthy track. The labels are drawn alone: the _phase1 detections they
+were made from (Aug 18) have since been rerun with another checkpoint, so a
+raw-vs-label split would compare against the wrong boxes.
 
     .venv/bin/python scripts/finetune/review_pseudo_labels.py --clip HV_T_EW_1
 """
@@ -21,23 +22,26 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 
-RAW = (80, 80, 235)      # red: raw prediction
-LAB = (70, 220, 70)      # green: pseudo-label
+CORRECTED = (70, 220, 70)    # green: from a track
+KEPT = (0, 150, 255)         # orange: model box kept as is
 
 
 def corners8(size, yaw, ctr):
     l, w, h = size
     c, s = math.cos(yaw), math.sin(yaw)
     R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-    b = np.array([[w / 2, w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2],
-                  [l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2, l / 2],
+    # length along the heading (the convention of the pred JSON, the labels and
+    # score_heading); the old order put the length across the car
+    b = np.array([[l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2],
+                  [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2],
                   [0, 0, 0, 0, h, h, h, h]])
     return (R @ b + np.array(ctr).reshape(3, 1)).T
 
 
-def draw(img, objs, l2c, k34, col, tag):
+def draw(img, objs, l2c, k34, tag):
     n = 0
     for o in objs:
+        col = CORRECTED if o.get("yaw_source") == "track_motion" else KEPT
         cc = (l2c @ np.c_[corners8([o["l"], o["w"], o["h"]], o["yaw"],
                                    [o["x"], o["y"], o["z"]]), np.ones(8)].T).T[:, :3]
         if np.sum(cc[:, 2] > 1e-6) < 4:
@@ -45,7 +49,7 @@ def draw(img, objs, l2c, k34, col, tag):
         draw_box_3d(img, project_to_image(cc, k34), c=col)
         n += 1
     for th, c in ((5, (0, 0, 0)), (2, (255, 255, 255))):
-        cv2.putText(img, f"{tag} ({n})", (25, 45), cv2.FONT_HERSHEY_SIMPLEX, 1.1, c, th, cv2.LINE_AA)
+        cv2.putText(img, f"{tag} ({n}): green corrected from track, orange kept from model", (25, 45), cv2.FONT_HERSHEY_SIMPLEX, 1.1, c, th, cv2.LINE_AA)
     return img
 
 
@@ -70,12 +74,8 @@ def main():
         img = cv2.imread(str(ROOT / f"data/camera-data/{clip}/frames_all/{f:03d}.jpg"))
         if img is None:
             continue
-        raw = [o for o in json.loads((det_dir / f"{f:03d}_pred.json").read_text())
-               if o["class_name"] == "car" and o["score"] >= 0.3]
         lab = json.loads((lab_dir / f"{f:03d}_label.json").read_text())
-        left = draw(img.copy(), raw, l2c, k34, RAW, "RAW PREDICTION")
-        right = draw(img.copy(), lab, l2c, k34, LAB, "PSEUDO-LABEL (train on this)")
-        cv2.imwrite(str(out / f"{f:03d}.jpg"), np.hstack([left, right]))
+        cv2.imwrite(str(out / f"{f:03d}.jpg"), draw(img, lab, l2c, k34, f"{clip} frame {f:03d} labels"))
 
     listing = out / "_f.txt"
     listing.write_text("".join(f"file '{f:03d}.jpg'\n" for f in frames))

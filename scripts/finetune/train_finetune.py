@@ -55,8 +55,10 @@ def load_sample(clip, frame, K, l2c):
     img, mats, meta = build_mats_dict(str(img_p), K, l2c, final_dim, img_conf)
     lab_p = ROOT / f"outputs/finetune/pseudo_labels/{clip}/{frame:03d}_label.json"
     objs = json.loads(lab_p.read_text())
-    # column order must match the model's own output space, see _selfcheck
-    boxes = torch.tensor([[o["x"], o["y"], o["z"], o["w"], o["l"], o["h"],
+    # column order must match the model's own output space, see _selfcheck.
+    # Labels store the box bottom (what get_bboxes outputs), but the head regresses
+    # the box centre and get_bboxes subtracts h/2 on decode, so add it back here.
+    boxes = torch.tensor([[o["x"], o["y"], o["z"] + o["h"] / 2, o["w"], o["l"], o["h"],
                            o["yaw"], o.get("vx", 0.0), o.get("vy", 0.0)]
                           for o in objs], dtype=torch.float32)
     labels = torch.full((len(objs),), CAR_CLASS_INDEX, dtype=torch.long)
@@ -105,7 +107,7 @@ def _selfcheck():
     This pins the box column order, which no amount of reading the code settles:
     the dataset writes one order and the inference decoder reads another.
     """
-    dev = "cpu"
+    dev = "cuda" if torch.cuda.is_available() else "cpu"   # the compiled voxel pooling is CUDA only
     model = build_model(); load_checkpoint(model, CKPT_PATH); model.to(dev).eval()
     K, l2c = clip_paths("HV_T_EW_1")
     img, mats, _ = build_mats_dict(
@@ -118,7 +120,7 @@ def _selfcheck():
         res = model.get_bboxes(preds, [{"box_type_3d": LiDARInstance3DBoxes}])
     raw, scores, labels = res[0][0].tensor, res[0][1], res[0][2]
     keep = (scores >= 0.3) & (labels == CAR_CLASS_INDEX)
-    boxes = raw[keep][:, :9].clone().float()
+    boxes = raw[keep][:, :9].clone().float().to(dev)
     assert len(boxes) > 3, f"only {len(boxes)} car detections to test with"
 
     with torch.no_grad():
@@ -129,11 +131,18 @@ def _selfcheck():
         shuffled[:, [3, 4]] = shuffled[:, [4, 3]]        # swap the two dims
         loss_swapped = float(model.loss(model.get_targets([shuffled], [labels[keep]]),
                                         model(img, mats)))
+        # get_bboxes outputs the box bottom; the targets must be the centre (load_sample adds h/2)
+        centred = boxes.clone()
+        centred[:, 2] += centred[:, 5] / 2
+        loss_centred = float(model.loss(model.get_targets([centred], [labels[keep]]),
+                                        model(img, mats)))
     print(f"selfcheck: {len(boxes)} own detections as labels -> loss {matched:.3f}; "
-          f"with length/width swapped -> {loss_swapped:.3f}")
+          f"with length/width swapped -> {loss_swapped:.3f}; z as centre -> {loss_centred:.3f}")
     assert matched < loss_swapped, (
         "swapping dims did not increase the loss: the column order assumption "
         "in load_sample is not verified by this test")
+    assert loss_centred < matched, (
+        "z as box centre did not lower the loss: the h/2 shift in load_sample is wrong")
     print("selfcheck ok (self-consistent ordering confirmed)")
 
 
