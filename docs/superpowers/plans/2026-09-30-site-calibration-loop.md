@@ -194,3 +194,23 @@ along-ray pattern. Neutral on accuracy; its effect is fewer broken tracks
   drove (travel >= 15 m), pooled over the 5 T clips; road_mask.py uses
   road_mask.png when present, else the hand band. Agrees with the hand band on
   all but 1 to 3 boxes per run, never keeps a box the band drops.
+
+### Fine-tune on corrected labels (2026-10-01)
+
+Labels: pseudo_labels_v2 (correct_labels.py: ~1 m line-of-sight shift from
+silhouette fit, road mask, carriageway heading for untracked labels, overlap
+dedupe). Same recipe as before (head only, 5 epochs, 102.4 m base, site
+extrinsic), lab GPU 1. outputs/finetune/run3_v2labels; held-out loss on v2
+labels 1.78 -> 0.56.
+
+AV_T_EW_3, pretrained / previous fine-tune (zfix) / new (v2):
+- Image alignment, box contact minus car contact: about -0.3 to -0.8 / -0.7 to
+  -1.2 / -0.2 to +0.2 m; overlap with car 0.62-0.70 / 0.66-0.71 / 0.69-0.79.
+- Front right, away and oncoming: 95/3 / 99/98 / 100/100 %; axis 8.1/4.3 /
+  3.3/2.1 / 3.0/1.5 deg. GPS car backwards 100 / 2.5 / 0 %.
+- On-road cars per frame: 4.80 / 6.13 / 5.66 (beyond 90 m 0.58 / 0.99 / 0.89).
+  The new model misses some large vehicles the previous one found (frame 60
+  pickup, frame 150 van) and finds others it missed.
+- At 15.1 m with mask and post-process, GPS car rigid RMSE 0.10 / 0.16 / 0.15 m
+  (rigid fit hides constant offsets, so the image alignment is the position
+  check that sees the ~1 m bias).

@@ -41,6 +41,7 @@ CAR_TASK = 0              # the head has six task groups; ours labels only cars
 TRAIN_CLIPS = ["HV_T_EW_1", "AV_T_WE_1"]
 HELD_OUT = ["AV_T_EW_3"]          # never trained on, so the result means something
 CAR_CLASS_INDEX = 0
+LABELS = "pseudo_labels"          # label set under outputs/finetune/, set by --labels
 
 
 def clip_paths(clip):
@@ -53,7 +54,7 @@ def clip_paths(clip):
 def load_sample(clip, frame, K, l2c):
     img_p = ROOT / f"data/camera-data/{clip}/frames_all/{frame:03d}.jpg"
     img, mats, meta = build_mats_dict(str(img_p), K, l2c, final_dim, img_conf)
-    lab_p = ROOT / f"outputs/finetune/pseudo_labels/{clip}/{frame:03d}_label.json"
+    lab_p = ROOT / f"outputs/finetune/{LABELS}/{clip}/{frame:03d}_label.json"
     objs = json.loads(lab_p.read_text())
     # column order must match the model's own output space, see _selfcheck.
     # Labels store the box bottom (what get_bboxes outputs), but the head regresses
@@ -66,7 +67,7 @@ def load_sample(clip, frame, K, l2c):
 
 
 def frames_for(clip):
-    d = ROOT / f"outputs/finetune/pseudo_labels/{clip}"
+    d = ROOT / f"outputs/finetune/{LABELS}/{clip}"
     return sorted(int(p.stem.split("_")[0]) for p in d.glob("*_label.json"))
 
 
@@ -159,7 +160,10 @@ def main():
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--limit", type=int, default=None, help="frames per clip, for a quick run")
     ap.add_argument("--out", default="outputs/finetune/run1")
+    ap.add_argument("--labels", default="pseudo_labels", help="label set, e.g. pseudo_labels_v2 (correct_labels.py)")
     args = ap.parse_args()
+    global LABELS
+    LABELS = args.labels
 
     torch.manual_seed(0); random.seed(0); np.random.seed(0)
     dev = args.device
