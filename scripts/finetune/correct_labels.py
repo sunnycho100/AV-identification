@@ -16,11 +16,15 @@ How, image only, no GPS:
      median shift: the bias is close to constant with range.
   4. Labels off the road (road_mask.png from build_road_mask.py) are dropped:
      parked cars, the location banner, snow.
-  5. Labels kept from the model (no usable track) still carry the pretrained
-     model's front, which is backwards for most oncoming cars. Their front is
-     flipped when the track-corrected labels in the same stretch of lane
-     (LANE_DY_M across, LANE_DX_M along, any frame) clearly travel the other
-     way. The axis is kept; only the front changes.
+  5. Labels kept from the model (no usable track, mostly far cars whose
+     tracks break into pieces under 15 frames) still carry the pretrained
+     model's heading: 5-11 deg off the lane at the median and backwards for
+     most oncoming cars. They take the heading of the track-corrected labels in
+     the same stretch of carriageway (LANE_DY_M across, LANE_DX_M along, any frame)
+     when those clearly agree; otherwise they are left as they are.
+  6. Two labels whose road footprints overlap in one frame are one vehicle
+     seen twice (e.g. a tow truck and the car on it); only the best is kept:
+     own track, then lane flow, then model, then score.
 
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/finetune/correct_labels.py --clip HV_T_EW_1
 writes outputs/finetune/pseudo_labels_v2/<clip>/ (same file layout as v1) with
@@ -42,8 +46,9 @@ import road_mask as rm            # noqa: E402
 SHIFTS_M = np.arange(-3.0, 3.01, 0.1)
 MIN_FITS = 5          # matched frames before a track's own shift is trusted
 MIN_IOU = 0.4         # a fit below this overlap is not a clean match
-LANE_DY_M, LANE_DX_M = 2.0, 20.0
+LANE_DY_M, LANE_DX_M = 5.0, 30.0    # one carriageway: all its lanes run the same way, the two are ~6 m apart
 MIN_LANE_VOTES, MIN_LANE_AGREE = 10, 0.9
+RANK = {"track_motion": 0, "lane_flow": 1}
 
 
 def ray_dir(b, cam):
@@ -70,14 +75,31 @@ def best_shift(K, M, b, blob, cam):
     return float(SHIFTS_M[k]), float(scores[k])
 
 
-def lane_front(b, moving):
-    """+1 or -1 for the way traffic travels along x where b is, from the
-    track-corrected labels; 0 when there is not enough clear evidence."""
+def lane_heading(b, moving):
+    """Heading of tracked traffic where b is (circular mean of the
+    track-corrected labels there), or None without clear evidence."""
     near = moving[(np.abs(moving[:, 1] - b["y"]) < LANE_DY_M) & (np.abs(moving[:, 0] - b["x"]) < LANE_DX_M)]
     if len(near) < MIN_LANE_VOTES:
-        return 0
-    fwd = float(np.mean(np.cos(near[:, 2]) > 0))
-    return 1 if fwd >= MIN_LANE_AGREE else -1 if fwd <= 1 - MIN_LANE_AGREE else 0
+        return None
+    mean = np.arctan2(np.sin(near[:, 2]).mean(), np.cos(near[:, 2]).mean())
+    if np.mean(np.cos(near[:, 2] - mean) > 0) < MIN_LANE_AGREE:
+        return None          # traffic in both directions here: no single heading
+    return float(mean)
+
+
+def footprints_overlap(a, b):
+    ra, rb = (((p["x"], p["y"]), (p["l"], p["w"]), float(np.degrees(p["yaw"]))) for p in (a, b))
+    return cv2.rotatedRectangleIntersection(ra, rb)[0] != cv2.INTERSECT_NONE
+
+
+def dedupe(labels):
+    """Keep the best of any labels whose footprints overlap; returns (kept, n_dropped)."""
+    order = sorted(labels, key=lambda b: (RANK.get(b.get("yaw_source"), 2), -b.get("score", 0)))
+    kept = []
+    for b in order:
+        if not any(footprints_overlap(b, k) for k in kept):
+            kept.append(b)
+    return kept, len(labels) - len(kept)
 
 
 def one_to_one(labels, img, bg, K, M):
@@ -138,7 +160,7 @@ def main():
 
     moving = np.array([[b["x"], b["y"], b["yaw"]] for labs in labels.values() for b in labs
                        if b.get("yaw_source") == "track_motion"])
-    n_in = n_out = n_off = n_flip = 0
+    n_in = n_out = n_off = n_flip = n_dup = 0
     for stem, labs in labels.items():
         out = []
         for b in labs:
@@ -152,22 +174,23 @@ def main():
             nb = {**b, "x": b["x"] + s * d[0], "y": b["y"] + s * d[1],
                   "shift_m": s, "pos_source": f"image_{how}"}
             if b.get("yaw_source") != "track_motion":
-                lane = lane_front(b, moving)
-                if lane and np.sign(np.cos(b["yaw"])) != lane:
-                    nb["yaw"] = float(np.arctan2(np.sin(b["yaw"] + np.pi), np.cos(b["yaw"] + np.pi)))
-                    nb["yaw_source"] = "model_front_from_lane"
+                lane = lane_heading(b, moving)
+                if lane is not None:
+                    nb["yaw"], nb["yaw_source"] = lane, "lane_flow"
                     n_flip += 1
             out.append(nb)
+        out, d = dedupe(out)
+        n_dup += d
         n_out += len(out)
         (dst / f"{stem}_label.json").write_text(json.dumps(out, indent=2))
     manifest = {"clip": a.clip, "from": str(src.relative_to(ROOT)), "labels_in": n_in, "labels_out": n_out,
-                "dropped_off_road": n_off, "fronts_flipped_from_lane": n_flip, "fits": len(fits), "clip_median_shift_m": clip_shift,
+                "dropped_off_road": n_off, "headings_from_lane_flow": n_flip, "duplicates_dropped": n_dup, "fits": len(fits), "clip_median_shift_m": clip_shift,
                 "tracks_with_own_shift": len(track_shift),
                 "track_shift_spread_m": float(np.subtract(*np.percentile(list(track_shift.values()), [75, 25])))
                 if track_shift else None,
                 "provenance": "v1 labels; position slid along the line of sight to fit the car outline "
-                              "(background subtraction); off-road labels dropped; model-kept fronts flipped to match "
-                              "the lane's tracked traffic. GPS not used."}
+                              "(background subtraction); off-road labels dropped; model-kept headings set from the "
+                              "lane's tracked traffic. GPS not used."}
     (dst / "manifest.json").write_text(json.dumps(manifest, indent=2))
     print(json.dumps(manifest, indent=2))
 
@@ -186,8 +209,13 @@ def _selfcheck():
     s, ov = best_shift(K, M, label, blob, cam)
     assert abs(s - 1.0) <= 0.15 and ov > 0.9, (s, ov)
     moving = np.array([[60.0 + i, -8.0, np.pi] for i in range(20)])          # oncoming lane
-    assert lane_front({"x": 62.0, "y": -8.5}, moving) == -1
-    assert lane_front({"x": 62.0, "y": -30.0}, moving) == 0                   # no evidence there
+    assert abs(abs(lane_heading({"x": 62.0, "y": -8.5}, moving)) - np.pi) < 1e-6
+    assert lane_heading({"x": 62.0, "y": -30.0}, moving) is None                # no evidence there
+    box = {"l": 4.3, "w": 1.8, "yaw": 0.0}
+    kept, d = dedupe([{**box, "x": 50.0, "y": -36.0, "yaw_source": "model", "score": 0.9},
+                      {**box, "x": 53.0, "y": -36.6, "yaw_source": "lane_flow", "score": 0.5},   # 3 m apart, overlapping
+                      {**box, "x": 60.0, "y": -36.0, "yaw_source": "model", "score": 0.5}])
+    assert d == 1 and [k["yaw_source"] for k in kept] == ["lane_flow", "model"], kept
     print(f"selfcheck ok (label 1 m too close -> shift {s:+.1f} m, overlap {ov:.2f})")
 
 

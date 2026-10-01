@@ -1,8 +1,8 @@
 """Render the pseudo-labels so a human can judge them.
 
 Green: corrected from a good track (heading from motion, z on the road, size
-the track median). Orange: kept as the model predicted it, because the car had
-no trustworthy track. The labels are drawn alone: the _phase1 detections they
+the track median). Cyan: no usable track, heading from the lane's tracked
+traffic (correct_labels.py). Orange: kept as the model predicted it. The labels are drawn alone: the _phase1 detections they
 were made from (Aug 18) have since been rerun with another checkpoint, so a
 raw-vs-label split would compare against the wrong boxes.
 
@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 
 CORRECTED = (70, 220, 70)    # green: from a track
+LANE = (255, 200, 0)         # cyan: heading from the lane's tracked traffic
 KEPT = (0, 150, 255)         # orange: model box kept as is
 
 
@@ -41,7 +42,7 @@ def corners8(size, yaw, ctr):
 def draw(img, objs, l2c, k34, tag):
     n = 0
     for o in objs:
-        col = CORRECTED if o.get("yaw_source") == "track_motion" else KEPT
+        col = {"track_motion": CORRECTED, "lane_flow": LANE}.get(o.get("yaw_source"), KEPT)
         cc = (l2c @ np.c_[corners8([o["l"], o["w"], o["h"]], o["yaw"],
                                    [o["x"], o["y"], o["z"]]), np.ones(8)].T).T[:, :3]
         if np.sum(cc[:, 2] > 1e-6) < 4:
@@ -49,7 +50,7 @@ def draw(img, objs, l2c, k34, tag):
         draw_box_3d(img, project_to_image(cc, k34), c=col)
         n += 1
     for th, c in ((5, (0, 0, 0)), (2, (255, 255, 255))):
-        cv2.putText(img, f"{tag} ({n}): green corrected from track, orange kept from model", (25, 45), cv2.FONT_HERSHEY_SIMPLEX, 1.1, c, th, cv2.LINE_AA)
+        cv2.putText(img, f"{tag} ({n}): green: own track, cyan: lane flow, orange: model", (25, 45), cv2.FONT_HERSHEY_SIMPLEX, 1.1, c, th, cv2.LINE_AA)
     return img
 
 
@@ -57,17 +58,18 @@ def main():
     ap = argparse.ArgumentParser("Review pseudo-labels against raw predictions")
     ap.add_argument("--clip", required=True)
     ap.add_argument("--stills", type=int, default=6)
+    ap.add_argument("--labels", default="pseudo_labels", help="label set under outputs/finetune/, e.g. pseudo_labels_v2")
     args = ap.parse_args()
     clip = args.clip
 
     det_dir = ROOT / f"outputs/object_detection/camera-data/{clip}_phase1"
-    lab_dir = ROOT / f"outputs/finetune/pseudo_labels/{clip}"
+    lab_dir = ROOT / f"outputs/finetune/{args.labels}/{clip}"
     cal = json.loads((det_dir / "calibration_used.json").read_text())
     K = np.array(cal["K"]); l2c = np.array(cal["lidar2cam"])
     k34 = np.zeros((3, 4)); k34[:3, :3] = K
 
     frames = sorted(int(p.stem.split("_")[0]) for p in lab_dir.glob("*_label.json"))
-    out = ROOT / f"outputs/finetune/review/{clip}"
+    out = ROOT / f"outputs/finetune/review/{args.labels}/{clip}"
     out.mkdir(parents=True, exist_ok=True)
 
     for f in frames:
@@ -75,7 +77,7 @@ def main():
         if img is None:
             continue
         lab = json.loads((lab_dir / f"{f:03d}_label.json").read_text())
-        cv2.imwrite(str(out / f"{f:03d}.jpg"), draw(img, lab, l2c, k34, f"{clip} frame {f:03d} labels"))
+        cv2.imwrite(str(out / f"{f:03d}.jpg"), draw(img, lab, l2c, k34, f"{clip} {args.labels} frame {f:03d}"))
 
     listing = out / "_f.txt"
     listing.write_text("".join(f"file '{f:03d}.jpg'\n" for f in frames))
