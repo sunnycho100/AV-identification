@@ -214,3 +214,20 @@ AV_T_EW_3, pretrained / previous fine-tune (zfix) / new (v2):
 - At 15.1 m with mask and post-process, GPS car rigid RMSE 0.10 / 0.16 / 0.15 m
   (rigid fit hides constant offsets, so the image alignment is the position
   check that sees the ~1 m bias).
+
+### 140.8 m checkpoint fine-tuned on the same labels (2026-10-01)
+
+BEVH_RANGE=140, same recipe and v2 labels, lab GPU 0, outputs/finetune/run4_v2labels_140
+(frozen weights verified equal to the 140.8 base). Held-out loss 2.70 -> 0.83
+(best 0.80 at epoch 2). AV_T_EW_3, 140.8 pretrained / 102.4 fine-tune (v2) /
+140.8 fine-tune (v2140):
+- Image alignment, contact offset: -0.25 to -0.75 / -0.23 to +0.15 / -0.40 to
+  +0.05 m; overlap 0.66-0.72 / 0.69-0.79 / 0.71-0.79.
+- Front right away/oncoming: 82/10 / 100/100 / 100/100 %; axis 10.4/3.5 /
+  3.0/1.5 / 2.6/1.7 deg. GPS car backwards 100 / 0 / 0 %.
+- GPS car at 15.1 m, masked + post-processed: v2 0.15 m over 82 frames, v2140
+  0.18 m over 93 frames.
+- On-road cars beyond 110 m per frame: 0.52 / 0.00 / 0.01. The fine-tune lost
+  the 140.8 model's far range: only 73 of 3,978 labels lie beyond 102 m
+  (labels come from the 102.4 detector), so the head learned the far grid is
+  empty. Fix: labels from the 140.8 detector, or no loss beyond ~102 m.
