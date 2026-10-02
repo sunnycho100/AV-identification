@@ -34,9 +34,15 @@ from trajectory_features import diff    # noqa: E402
 
 ROLE = {"HV_T_EW_1": "used to fit the calibration", "AV_T_WE_1": "used to fit the calibration",
         "AV_T_WE_3": "held out, video cut shorter than the GPS alignment"}
+# GPS not usable until the lab confirms which car carried it and how the video
+# start was matched: the only marked car in view (vehicle 33, 96-140 m away)
+# moves at ~9 m/s where the GPS reads 25.5 m/s.
+EXCLUDED = {"HV_T_EW_2": "instrumented car not confirmed; marked car contradicts the GPS speed"}
 
 
 def validate(clip, tag):
+    if clip in EXCLUDED:
+        return {"clip": clip, "excluded": EXCLUDED[clip]}
     d = ROOT / "outputs/trajectories" / f"{clip}_{tag}"
     vid = json.loads((d / "instrumented.json").read_text())["vehicle_id"]
     states = json.loads((d / "tracks.json").read_text())["tracks"][vid]

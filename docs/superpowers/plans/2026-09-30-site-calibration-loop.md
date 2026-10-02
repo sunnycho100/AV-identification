@@ -248,7 +248,12 @@ Instrumented vehicle (image only): AV_T_EW_3 40 and HV_T_EW_1 25 by hood
 marker; AV_T_WE_1 13 and AV_T_WE_3 7 by the hand-picked reference track; all
 with no runner-up. HV_T_EW_2: the marker never reaches the 0.87 acceptance
 score (peaks 0.82-0.83) and the weak matches land on plates of different cars;
-needs a person to point out the car.
+needs a person to point out the car. Update: the only car with the marker is
+vehicle 33, which stays 96-140 m away (tracked 7 frames by the 102.4 m model,
+151 by the 140.8 m model) and moves ~9 m/s, while the clip's GPS reads 25.5
+m/s (rigid RMSE 26 m). Either the GPS is from another, unmarked car or the
+GPS-video alignment is off. HV_T_EW_2's GPS is excluded from validation until
+the lab confirms; its other vehicles stay usable as traffic.
 
 GPS (instrumented vehicle, final output):
 - AV_T_EW_3 held out: RMSE 0.15 m, speed 1.004 (MAE 0.17), heading 0.19 deg,
