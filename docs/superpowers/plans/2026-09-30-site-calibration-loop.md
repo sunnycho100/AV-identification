@@ -265,3 +265,29 @@ GPS (instrumented vehicle, final output):
 Bug found and fixed on the way: stitched gaps were smoothed as a single frame,
 creating speed bursts at every join (AV_T_WE_3 accel rms 3.58 -> 1.53).
 Speed beyond 95 m reads 2-3% low against 40-80 m on every clip.
+
+### Height review: 15.6 m rerun, timing sensitivity, Codex review (2026-10-02)
+
+Five clips rerun at 15.6 m with the VP pitch (tag ft102_h156, lab GPU detection,
+same pipeline). Against 15.1 m with dp -0.31:
+- Metric scale is the same within ~1%: GPS speed ratio 1.000 vs 1.004 (AV_T_EW_3
+  held out), median vehicle speed 26.76 vs 26.98 m/s. The two settings sit on the
+  same height-pitch ridge; they differ in how scale changes with range.
+- 15.6 m is noisier everywhere: held-out RMSE 0.19 vs 0.15 m, speed MAE 0.40 vs
+  0.17 m/s, camera accel rms 0.67 vs 0.35 (GPS 0.13); over all 80 vehicles median
+  accel rms 0.75 vs 0.64, speed std 0.49 vs 0.38, lateral std 0.15 vs 0.08 m.
+  The camera-only numbers need no GPS timing.
+Timing sensitivity of the GPS-distance fit (GPS interpolated at frame/fps + tau):
+HV_T_EW_1 (car slowing ~1 m/s in the window) h 14.6-15.1 free pitch, 15.1-15.9 with
+dp 0 for tau -2..+1 s; AV_T_WE_1 (steady) 15.0-15.2 and 15.5-15.7. Fit RMS barely
+changes with tau, so the offset is not identifiable from this data. 29.97 fps: +0.02 m.
+Contact points are automatic (lowest blob pixel); the manual click files are empty.
+OTC3D "15.64 m" is the local-plane height 14.52 m times the 12 ft lane-width
+correction; the dash correction gives ~11.9 m and the audit rejects a single scale,
+so it is not independent support for 15.6 m.
+Codex review (gpt-5.6-sol): GPS fit constrains a ridge, its standard errors are
+optimistic (correlated pairs); OTC3D is corroboration, not a primary source;
+report about +-4% scale uncertainty plus the +-3% range-dependent part.
+Decision for now: keep 15.1 m dp -0.31 as the main calibration (same scale, less
+range-dependent distortion), report scale uncertainty about +-4%. Decisive check
+still open: real lane width or dash spacing from WisDOT plans or aerial imagery.
