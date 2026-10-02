@@ -231,3 +231,32 @@ BEVH_RANGE=140, same recipe and v2 labels, lab GPU 0, outputs/finetune/run4_v2la
   the 140.8 model's far range: only 73 of 3,978 labels lie beyond 102 m
   (labels come from the 102.4 detector), so the head learned the far grid is
   empty. Fix: labels from the 140.8 detector, or no loss beyond ~102 m.
+
+### Trajectory extraction on all five Todd Drive clips (2026-10-01)
+
+scripts/pipeline: extract_trajectories.py (detect, road mask, track, stitch,
+smooth, lanes, per-vehicle CSV), mark_instrumented.py, trajectory_features.py,
+validate_against_gps.py. Detection on the lab GPU (102.4 m fine-tune, 15.1 m
+calibration for every clip). Outputs in outputs/trajectories/<clip>_ft102.
+
+Vehicles per clip: AV_T_EW_3 35, AV_T_WE_1 33, AV_T_WE_3 21 (188-frame cut),
+HV_T_EW_1 33, HV_T_EW_2 29; 80 with at least 2 s of motion in features.csv.
+Lanes: 4 outgoing (a quiet outer lane), 3 oncoming, the same centres within
+~0.5 m on every clip.
+
+Instrumented vehicle (image only): AV_T_EW_3 40 and HV_T_EW_1 25 by hood
+marker; AV_T_WE_1 13 and AV_T_WE_3 7 by the hand-picked reference track; all
+with no runner-up. HV_T_EW_2: the marker never reaches the 0.87 acceptance
+score (peaks 0.82-0.83) and the weak matches land on plates of different cars;
+needs a person to point out the car.
+
+GPS (instrumented vehicle, final output):
+- AV_T_EW_3 held out: RMSE 0.15 m, speed 1.004 (MAE 0.17), heading 0.19 deg,
+  accel noise ~0.3 m/s^2 (rms camera 0.35, GPS 0.13).
+- AV_T_WE_3 held out, cut mismatch: RMSE 0.44, speed 0.959, accel rms 1.53 vs
+  0.12 (speed wobbles +-1 m/s as the car drives away).
+- HV_T_EW_1 / AV_T_WE_1 (calibration clips): RMSE 0.35 / 0.10, speed 0.985 /
+  1.000.
+Bug found and fixed on the way: stitched gaps were smoothed as a single frame,
+creating speed bursts at every join (AV_T_WE_3 accel rms 3.58 -> 1.53).
+Speed beyond 95 m reads 2-3% low against 40-80 m on every clip.

@@ -30,10 +30,22 @@ from score_heading import coasted       # noqa: E402
 
 
 def clean(track, fps):
-    """One track (list of states) to its trimmed, smoothed copy. None if nothing is left."""
+    """One track (list of states) to its trimmed, smoothed copy. None if nothing is left.
+
+    Missing frames (a stitched gap) are filled with copies of the previous state
+    before smoothing, so the filter steps one frame at a time and treats them as
+    missing; without this a gap of n frames is integrated as one frame."""
     c = coasted(track)
     last = len(track) - 1 - int(np.argmax(~c[::-1]))      # last detected state
-    track, c = [dict(s) for s in track[:last + 1]], c[:last + 1]
+    track, c = [dict(s) for s in track[:last + 1]], list(c[:last + 1])
+    full, miss = [], []
+    for s, cs in zip(track, c):
+        while full and s["frame"] > full[-1]["frame"] + 1:
+            full.append({**full[-1], "frame": full[-1]["frame"] + 1})
+            miss.append(True)
+        full.append(s)
+        miss.append(bool(cs))
+    track, c = full, miss
     if len(track) < 3:
         return track
     kf = build_kf(1.0 / fps)
@@ -87,7 +99,13 @@ def _selfcheck():
     assert abs(early - 20) < 1.0, early
     lat = np.std([s["y"] - 0.1 * s["frame"] / 30 for s in out])
     assert lat < 0.15, lat
-    print(f"selfcheck ok (55 of 60 states kept, early speed {early:.2f} m/s, lateral std {lat:.3f} m)")
+    gap = [s for s in track[:55] if not 30 <= s["frame"] < 38]                 # an 8-frame stitched gap
+    out2 = clean(gap, 30)
+    sp = np.array([s["speed_mps"] for s in out2])
+    assert len(out2) == 55 and [s["frame"] for s in out2] == list(range(55)), len(out2)
+    assert np.abs(sp - 20).max() < 2.0, sp.round(1)
+    print(f"selfcheck ok (55 of 60 states kept, early speed {early:.2f} m/s, lateral std {lat:.3f} m, "
+          f"8-frame gap filled, speed {sp.min():.1f}-{sp.max():.1f})")
 
 
 if __name__ == "__main__":
