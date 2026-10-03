@@ -29,7 +29,7 @@ from rts_smooth_track import build_kf   # noqa: E402
 from score_heading import coasted       # noqa: E402
 
 
-def clean(track, fps, times=None):
+def clean(track, fps, times=None, q_vel=None):
     """One track (list of states) to its trimmed, smoothed copy. None if nothing is left.
 
     Missing frames (a stitched gap) are filled with copies of the previous state
@@ -53,12 +53,16 @@ def clean(track, fps, times=None):
     t = [times[s["frame"]][0] if times and s["frame"] in times else s["frame"] / fps for s in track]
     if times:
         c = [m or times.get(s["frame"], (0, False))[1] for s, m in zip(track, c)]
-    for s, ts in zip(track, t):
+    for s, ts, m in zip(track, t, c):
         s["t_s"] = round(ts, 4)
+        if not m:                                         # the measurement, kept to check the smoother against
+            s["x_det"], s["y_det"] = s["x"], s["y"]
     if len(track) < 3:
         return track
     kf = build_kf(1.0 / fps)
     Q1 = kf.Q * fps                                       # process noise per second
+    if q_vel is not None:                                 # velocity random-walk strength, m^2/s^3
+        Q1[2, 2] = Q1[3, 3] = q_vel
     kf.x = np.array([track[0]["x"], track[0]["y"], 0, 0.])
     means, covs, Fs, Qs = [], [], [], []
     for i, (s, miss) in enumerate(zip(track, c)):

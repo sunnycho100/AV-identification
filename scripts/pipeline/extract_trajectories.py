@@ -47,10 +47,11 @@ from score_heading import coasted  # noqa: E402
 PY = sys.executable
 DEFAULTS = {
     "tag": "ft102",
+    "det_tag": "",            # detections from another run's tag (e.g. a smoother sweep); "" = tag
     "ckpt": "outputs/finetune/run3_v2labels/head_ft_ep5.ckpt",
     "config": "experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py",
     "extrinsic": "metric_extrinsic_h151_dpm031.json",
-    "score_thresh": 0.45, "track_low_thresh": 0.45, "max_age": 6, "fps": 30,
+    "score_thresh": 0.45, "track_low_thresh": 0.45, "max_age": 6, "fps": 30, "q_vel": 0.1,
 }
 LANE_BIN_M, MIN_LANE_SEP_M, MOVING_MPS = 0.25, 2.5, 3.0
 MIN_LANE_STATES, MAX_LANE_OFFSET_M = 30, 2.0   # a quiet lane still counts; off every lane = no lane
@@ -166,7 +167,7 @@ def main():
     a = ap.parse_args()
     cfg = {k: getattr(a, k) for k in DEFAULTS}
     run_name = f"{a.clip}_{a.tag}"
-    det = ROOT / "outputs/object_detection/camera-data" / run_name
+    det = ROOT / "outputs/object_detection/camera-data" / f"{a.clip}_{a.det_tag or a.tag}"
     cal = ROOT / "outputs/calibration/camera-data" / a.clip
 
     if not (det / "calibration_used.json").exists():
@@ -181,7 +182,7 @@ def main():
     if a.detect_only:
         return
     print("2. road mask")
-    run([PY, "scripts/object_detection/road_mask.py", "--clip", a.clip, "--run", a.tag])
+    run([PY, "scripts/object_detection/road_mask.py", "--clip", a.clip, "--run", a.det_tag or a.tag])
     times = ft.load(a.clip)
     if times is None:
         print("   no frame_times.json: using frame / fps (run frame_times.py first)")
@@ -199,7 +200,7 @@ def main():
     print("4. stitch")
     tracks, joined = st.stitch(d["tracks"], a.fps)
     print("5. smooth")
-    tracks = {k: pp.clean(v, a.fps, times) for k, v in tracks.items()}
+    tracks = {k: pp.clean(v, a.fps, times, a.q_vel) for k, v in tracks.items()}
     tracks = {k: v for k, v in tracks.items() if len(v) >= 3}
     n_before = len(tracks)
     tracks = drop_duplicates(tracks)

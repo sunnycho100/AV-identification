@@ -124,3 +124,29 @@ m/s^2, lat_std 0.085 m, follow 1.72 mph, frozen 0 (was 36 on AV_T_WE_3).
 Open: AV_T_WE_3 GPS car speed swings 27.3-29.4 m/s with range while GPS is
 steady; points at this clip's pitch (VP from 6 frames). A per-clip pitch from the
 dash ruler (spacing vs range) would test that without GPS.
+
+### Iteration 2: smoother process noise (2026-10-03) - kept, q_vel 0.5 -> 0.1
+
+Swept the RTS velocity random-walk strength q_vel (m^2/s^3), same detections
+and tracks (tags sm_q*). GPS-free scorecard (mean of 5 clips):
+
+| q_vel | accel_steady | lat_std | follow mph | resid m | resid ac1 |
+|---|---|---|---|---|---|
+| 0.5 (old) | 0.703 | 0.085 | 1.72 | 0.333 | 0.50 |
+| 0.1 | 0.245 | 0.074 | 1.56 | 0.361 | 0.56 |
+| 0.03 | 0.088 | 0.069 | 1.47 | 0.377 | 0.57 |
+| 0.01 | 0.032 | 0.068 | 1.46 | 0.385 | 0.58 |
+
+GPS-free metrics alone keep improving as q falls, and the residual guard is
+weak (residuals are already autocorrelated at 0.5: detection error drifts slowly),
+so they cannot say where smoothing starts to erase real acceleration. GPS check
+(accel rms camera / GPS, and rms of their difference):
+- AV_T_EW_3 (held out, steady): diff 0.30 / 0.12 / 0.10 / 0.12 for q 0.5 / 0.1 / 0.03 / 0.01.
+- HV_T_EW_1 (decelerating, GPS accel 0.51): camera 1.00 / 0.59 / 0.29 / 0.12,
+  diff 0.59 / 0.28 / 0.30 / 0.41. Below 0.1 the smoother flattens a real slow-down.
+Choice: 0.1, the strongest smoothing that keeps HV_T_EW_1's deceleration.
+HV_T_EW_1 is declared the smoother-tuning clip (it already set the height);
+AV_T_EW_3 stays held out: accel diff 0.30 -> 0.12 m/s^2, speed MAE 0.17 -> 0.13,
+RMSE 0.15 -> 0.14, speed ratio 1.005. Acceleration is now usable on cruising
+cars; jerk still is not.
+Scorecard after: frag_1s 0.941, accel_steady 0.245, lat_std 0.074, follow 1.56 mph.

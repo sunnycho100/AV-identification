@@ -8,6 +8,10 @@ Per run (outputs/trajectories/<clip>_<tag>):
   follow_mph    median |follower - leader| speed at spacing under 40 m, mph
                 (cars following closely move at nearly the same speed)
   frozen        states inside frozen video frames (frame_times.json), must be 0
+  resid_m       rms of detection minus smoothed position along the road, m
+                (guards against over-smoothing: should stay near detection noise)
+  resid_ac1     lag-1 autocorrelation of that residual within a track
+                (near 0: the smoother follows the car; large: it lags behind)
 Writes nothing; prints one row per run and the mean, as JSON if --json.
 
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/evaluation/scorecard.py --tag ft102
@@ -46,6 +50,13 @@ def score(clip, tag):
             for vid, R in by.items() for f, r in R.items()
             if r["lead_id"] and r["spacing_m"] and float(r["spacing_m"]) < 40
             and r["lead_id"] in by and f in by[r["lead_id"]]]
+    T = json.loads((d / "tracks.json").read_text())["tracks"]
+    res, ac = [], []
+    for t in T.values():
+        r = np.array([s["x_det"] - s["x"] for s in t if "x_det" in s])
+        if len(r) >= 10:
+            res.extend(r)
+            ac.append(float(np.corrcoef(r[:-1], r[1:])[0, 1]))
     times = ft.load(clip) or {}
     frozen = sum(1 for R in by.values() for f in R if times.get(f, (0, False))[1])
     return {"clip": clip, "vehicles": len(feats),
@@ -53,7 +64,9 @@ def score(clip, tag):
             "accel_steady": round(float(np.median(steady)), 3) if steady else None,
             "lat_std": round(float(np.median(lat)), 3) if lat else None,
             "follow_mph": round(float(np.median(gaps)), 2) if gaps else None,
-            "frozen": frozen}
+            "frozen": frozen,
+            "resid_m": round(float(np.sqrt(np.mean(np.square(res)))), 3) if res else None,
+            "resid_ac1": round(float(np.median(ac)), 3) if ac else None}
 
 
 def main():
@@ -63,7 +76,7 @@ def main():
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
     rows = [score(c, a.tag) for c in a.clips]
-    keys = ("frag_1s", "accel_steady", "lat_std", "follow_mph")
+    keys = ("frag_1s", "accel_steady", "lat_std", "follow_mph", "resid_m", "resid_ac1")
     mean = {k: round(float(np.mean([r[k] for r in rows if r[k] is not None])), 3) for k in keys}
     mean["frozen"] = sum(r["frozen"] for r in rows)
     if a.json:
