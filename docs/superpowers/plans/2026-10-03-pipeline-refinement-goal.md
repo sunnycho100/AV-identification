@@ -150,3 +150,23 @@ AV_T_EW_3 stays held out: accel diff 0.30 -> 0.12 m/s^2, speed MAE 0.17 -> 0.13,
 RMSE 0.15 -> 0.14, speed ratio 1.005. Acceleration is now usable on cruising
 cars; jerk still is not.
 Scorecard after: frag_1s 0.941, accel_steady 0.245, lat_std 0.074, follow 1.56 mph.
+
+### GPS benchmark (subagent A, commit 220e9e4) (2026-10-03)
+
+scripts/evaluation/gps_to_image.py + gps_benchmark.py. One site transform from
+HV_T_EW_1 + AV_T_WE_1 only (rotation from their GPS heading, camera point as the
+EW/WE mean so a shared time offset and the antenna lever arm cancel). Across the
+road is timing-free; along the road each clip gets one reported offset tau.
+- Picked cars ride the GPS path in the same lane on all four graded clips
+  (checked frame 249 of AV_T_EW_3 myself: lab-timed GPS box 57 m behind car 40,
+  tau-shifted box on car 40, the hood-marked car).
+- tau: HV_T_EW_1 -0.62 s, AV_T_WE_1 -0.59, AV_T_WE_3 +0.38, AV_T_EW_3 +2.01 s.
+  The lab timing of AV_T_EW_3 is ~2.6 s off from the others (matches the Sep 13
+  "cameras 75 m apart" finding). Along-road rms after tau is self-fitted, not a test.
+- Held-out AV_T_EW_3: speed 1.005, lateral bias +0.09 m (rms 0.15), heading -0.30 deg,
+  accel rms 0.14 vs GPS 0.13. AV_T_WE_3 benchmarkable (79 frames): speed 0.986,
+  lateral +0.29 m.
+- HV_T_EW_2: at lab timing 2.8 of 3.9 s of the GPS car fall in the video hole;
+  with AV_T_EW_3's offset it lands on vehicle 33 just before the hole. Needs a
+  person to confirm; at most 7 frames gradable at ~95 m.
+Ask the lab: the recording start times (recording_log) behind each 10 s clip.
