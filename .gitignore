@@ -47,6 +47,8 @@ data/v2x-*-split*.json
 Camera data/
 AV-HV trajectory data/
 data/camera-data/
+# Box download from the lab (raw 10-min recordings, task doc, references): local only.
+data/roadside_box/
 
 # Outputs & logs
 outputs/
