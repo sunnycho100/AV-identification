@@ -295,8 +295,11 @@ still open: real lane width or dash spacing from WisDOT plans or aerial imagery.
 ### Timing-free scale check: lane-line dashes and aerial imagery (2026-10-02)
 
 WisDOT lane lines: 12.5 ft white + 37.5 ft gap = 15.24 m cycle (TEOPS 3-2).
-- Aerial (Esri World Imagery z19, 0.218 m/px, Todd Dr site confirmed against the
-  camera view, outputs/reporting/camera_vs_aerial.jpg): dash cycle 14.98-15.01 m on
+- Aerial (Esri World Imagery z19, 0.218 m/px, US 12/18 just east of Todd Dr; the
+  site matches by caption, lane counts and the office building south of the road,
+  but the camera is NOT registered on the aerial: a hand placement and an edge-fit
+  warp both miss individual lanes by a metre or more, partly because the road is
+  elevated over Todd Dr): dash cycle 14.98-15.01 m on
   five lines (imagery scale ~1.6% short of the standard); lane width ~3.37 m north
   (3 lanes), ~3.44 m south (4 lanes), ~3.43-3.50 m after the 1.6% correction. Lanes
   are ~11.3 ft, not 12 ft, so the 12 ft lane-width argument for 16.3 m is wrong and
