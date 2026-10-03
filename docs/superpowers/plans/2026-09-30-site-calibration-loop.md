@@ -291,3 +291,24 @@ report about +-4% scale uncertainty plus the +-3% range-dependent part.
 Decision for now: keep 15.1 m dp -0.31 as the main calibration (same scale, less
 range-dependent distortion), report scale uncertainty about +-4%. Decisive check
 still open: real lane width or dash spacing from WisDOT plans or aerial imagery.
+
+### Timing-free scale check: lane-line dashes and aerial imagery (2026-10-02)
+
+WisDOT lane lines: 12.5 ft white + 37.5 ft gap = 15.24 m cycle (TEOPS 3-2).
+- Aerial (Esri World Imagery z19, 0.218 m/px, Todd Dr site confirmed against the
+  camera view, outputs/reporting/camera_vs_aerial.jpg): dash cycle 14.98-15.01 m on
+  five lines (imagery scale ~1.6% short of the standard); lane width ~3.37 m north
+  (3 lanes), ~3.44 m south (4 lanes), ~3.43-3.50 m after the 1.6% correction. Lanes
+  are ~11.3 ft, not 12 ft, so the 12 ft lane-width argument for 16.3 m is wrong and
+  traffic lane spacing at 15.1 m (~3.4 m) agrees with the road.
+- Camera (scripts/calibration/dash_cycle_check.py, five clips, 39-44 clean dash
+  cycles 15-100 m): through 15.1 m dp -0.31 median 15.30 m (mean 15.37 +- 0.11),
+  +0.4%, flat with range; through 15.6 m dp 0 median 15.50 m, +1.7%, +0.5% per 50 m.
+  Implied height on each pitch: 15.0-15.2 m (dp -0.31) and ~15.3 m (dp 0). If the
+  paint is as the aerial reads (14.99 m), subtract ~1.6%.
+- OTC3D re-anchored with these measurements (local-plane height 14.52 m): lane
+  width 3.43 m gives ~14.6 m, dash 15.24 m gives ~14.9 m. Its 15.64 m came from
+  assuming 12 ft lanes.
+Conclusion: GPS-free, timing-free evidence puts the scale within about 1% of the
+15.1 m dp -0.31 calibration and rules out 16.26 m. 15.1 m stays the main value;
+uncertainty about +-2% (paint standard vs aerial, dash detection), not +-4%.
