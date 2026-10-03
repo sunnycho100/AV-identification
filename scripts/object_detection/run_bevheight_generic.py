@@ -118,8 +118,8 @@ def render_annotated(image_path, preds, K, lidar2cam, out_path):
     for det in preds:
         l, w, h = det["l"], det["w"], det["h"]
         center = [det["x"], det["y"], det["z"] + h / 2.0]
-        # get_lidar_3d_8points expects [dx, dy, dz] = [w, l, h] where dx is size
-        # along X (width) and dy is size along Y (length).
+        # get_lidar_3d_8points takes [l, w, h]: length along the heading (x before
+        # the yaw rotation), width across it.
         corners = get_lidar_3d_8points([l, w, h], det["yaw"], center)
         corners_cam = (lidar2cam @ np.concatenate(
             [corners, np.ones((8, 1))], axis=1).T).T[:, :3]

@@ -31,8 +31,9 @@ def corners8(size, yaw, ctr):
     l, w, h = size
     c, s = math.cos(yaw), math.sin(yaw)
     R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-    b = np.array([[w / 2, w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2],
-                  [l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2, l / 2],
+    # length along the heading, as in review_pseudo_labels.corners8
+    b = np.array([[l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2],
+                  [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2],
                   [0, 0, 0, 0, h, h, h, h]])
     return (R @ b + np.array(ctr).reshape(3, 1)).T
 

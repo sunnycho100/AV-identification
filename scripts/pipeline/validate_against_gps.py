@@ -12,11 +12,11 @@ GPS is opened. Reports, on frames with both:
              central difference (trajectory_features.diff); rms of each and of
              their difference
 Clips whose GPS set the calibration (HV_T_EW_1, AV_T_WE_1) are marked as such;
-their numbers are not a held-out test. AV_T_WE_3's video is a shorter cut than
-the one its GPS was aligned to.
+their numbers are not a held-out test. AV_T_WE_3 and HV_T_EW_2 are excluded
+(see EXCLUDED), which leaves AV_T_EW_3 as the only held-out clip.
 
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/pipeline/validate_against_gps.py \
-        --clips AV_T_EW_3 HV_T_EW_2
+        --clips AV_T_EW_3 AV_T_WE_3
 """
 import argparse
 import csv
@@ -32,12 +32,12 @@ sys.path[:0] = [str(ROOT / "scripts/tracking"), str(ROOT / "scripts/pipeline")]
 import grade_target_vs_gps as gt        # noqa: E402
 from trajectory_features import diff    # noqa: E402
 
-ROLE = {"HV_T_EW_1": "used to fit the calibration", "AV_T_WE_1": "used to fit the calibration",
-        "AV_T_WE_3": "held out, video cut shorter than the GPS alignment"}
+ROLE = {"HV_T_EW_1": "used to fit the calibration", "AV_T_WE_1": "used to fit the calibration"}
 # GPS not usable until the lab confirms which car carried it and how the video
 # start was matched: the only marked car in view (vehicle 33, 96-140 m away)
 # moves at ~9 m/s where the GPS reads 25.5 m/s.
-EXCLUDED = {"HV_T_EW_2": "instrumented car not confirmed; marked car contradicts the GPS speed"}
+EXCLUDED = {"HV_T_EW_2": "instrumented car not confirmed; marked car contradicts the GPS speed",
+            "AV_T_WE_3": "local video is a shorter cut than the one its GPS was aligned to"}
 
 
 def validate(clip, tag):
