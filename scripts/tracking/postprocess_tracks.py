@@ -29,12 +29,16 @@ from rts_smooth_track import build_kf   # noqa: E402
 from score_heading import coasted       # noqa: E402
 
 
-def clean(track, fps):
+def clean(track, fps, times=None):
     """One track (list of states) to its trimmed, smoothed copy. None if nothing is left.
 
     Missing frames (a stitched gap) are filled with copies of the previous state
     before smoothing, so the filter steps one frame at a time and treats them as
-    missing; without this a gap of n frames is integrated as one frame."""
+    missing; without this a gap of n frames is integrated as one frame.
+
+    times (frame_times.load): frame -> (t_s, copy). The filter then steps by the
+    real time between frames, and frames that repeat an earlier picture are
+    treated as missing. Without it, frame / fps. Each state gets its t_s."""
     c = coasted(track)
     last = len(track) - 1 - int(np.argmax(~c[::-1]))      # last detected state
     track, c = [dict(s) for s in track[:last + 1]], list(c[:last + 1])
@@ -46,21 +50,34 @@ def clean(track, fps):
         full.append(s)
         miss.append(bool(cs))
     track, c = full, miss
+    t = [times[s["frame"]][0] if times and s["frame"] in times else s["frame"] / fps for s in track]
+    if times:
+        c = [m or times.get(s["frame"], (0, False))[1] for s, m in zip(track, c)]
+    for s, ts in zip(track, t):
+        s["t_s"] = round(ts, 4)
     if len(track) < 3:
         return track
     kf = build_kf(1.0 / fps)
+    Q1 = kf.Q * fps                                       # process noise per second
     kf.x = np.array([track[0]["x"], track[0]["y"], 0, 0.])
-    means, covs = [], []
-    for s, miss in zip(track, c):
+    means, covs, Fs, Qs = [], [], [], []
+    for i, (s, miss) in enumerate(zip(track, c)):
+        dt = t[i] - t[i - 1] if i else 1.0 / fps
+        kf.F[0, 2] = kf.F[1, 3] = dt
+        kf.Q = Q1 * dt
         kf.predict()
         if not miss:
             kf.update(np.array([s["x"], s["y"]]))
         means.append(kf.x.copy())
         covs.append(kf.P.copy())
-    sm, _, _, _ = kf.rts_smoother(np.array(means), np.array(covs))
+        Fs.append(kf.F.copy())
+        Qs.append(kf.Q.copy())
+    sm, _, _, _ = kf.rts_smoother(np.array(means), np.array(covs), Fs, Qs)
     for s, m in zip(track, sm):
         s["x"], s["y"], s["vx"], s["vy"] = (float(v) for v in m)
         s["speed_mps"] = float(np.hypot(m[2], m[3]))
+    if times:                                             # a frozen copy is not a new moment: drop its state
+        track = [s for s in track if not times.get(s["frame"], (0, False))[1]]
     return track
 
 
@@ -104,8 +121,18 @@ def _selfcheck():
     sp = np.array([s["speed_mps"] for s in out2])
     assert len(out2) == 55 and [s["frame"] for s in out2] == list(range(55)), len(out2)
     assert np.abs(sp - 20).max() < 2.0, sp.round(1)
+    # frames really 1/31 s apart, plus a frozen stretch (frames 20-24 repeat frame 19's picture)
+    times = {f: (f / 31.0, False) for f in range(60)}
+    times.update({f: (19 / 31.0, True) for f in range(20, 25)})
+    car = [{"frame": f, "x": 20 * times[f][0] + rng.normal(0, 0.05), "y": 0.0, "score": 0.6 + f * 1e-3,
+            "vx": 1.0, "speed_mps": 0.0} for f in range(60)]
+    out3 = clean(car, 30, times)
+    sp3 = np.array([s["speed_mps"] for s in out3 if s["frame"] > 30])
+    assert abs(np.median(sp3) - 20) < 0.3, np.median(sp3)
+    assert out3[-1]["t_s"] == round(59 / 31.0, 4) and not any(20 <= s["frame"] <= 24 for s in out3)
     print(f"selfcheck ok (55 of 60 states kept, early speed {early:.2f} m/s, lateral std {lat:.3f} m, "
-          f"8-frame gap filled, speed {sp.min():.1f}-{sp.max():.1f})")
+          f"8-frame gap filled, speed {sp.min():.1f}-{sp.max():.1f}; 31 fps clip with a freeze: "
+          f"{np.median(sp3):.2f} m/s, frame/30 would read {np.median(sp3) * 30 / 31:.2f})")
 
 
 if __name__ == "__main__":

@@ -60,7 +60,8 @@ def validate(clip, tag):
     ang = np.minimum(ang, 360 - ang)
     sc = np.array([s["speed_mps"] for s in common])
     sg = np.array([gps[s["frame"]][2] for s in common])
-    ac, ag = diff(sc), diff(sg)
+    tc = np.array([s.get("t_s", s["frame"] / 30.0) for s in common])   # real frame times
+    ac, ag = diff(sc, t=tc), diff(sg, t=tc)
     return {"clip": clip, "role": ROLE.get(clip, "held out"), "vehicle": vid, "frames": len(common),
             "rmse_rigid_m": round(r["rmse_rigid_m"], 2), "along_ray_by_range_m":
             {k: round(v["depth_err_median_m"], 2) for k, v in r["depth_err_by_range"].items()},

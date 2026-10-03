@@ -31,12 +31,15 @@ MIN_DURATION_S, MOVING_MPS = 2.0, 3.0
 DIFF_WIN_S, HOLD_S, FOLLOW_S = 0.5, 0.5, 3.0
 
 
-def diff(v, fps=FPS, win=DIFF_WIN_S):
-    """Central difference over win seconds (clamped at the ends)."""
+def diff(v, fps=FPS, win=DIFF_WIN_S, t=None):
+    """Central difference over win seconds (clamped at the ends). With t (seconds
+    per sample) the step is divided by the real elapsed time, not samples / fps."""
     h = max(1, int(round(win * fps / 2)))
     i = np.arange(len(v))
     lo, hi = np.clip(i - h, 0, len(v) - 1), np.clip(i + h, 0, len(v) - 1)
-    return (v[hi] - v[lo]) / np.maximum(hi - lo, 1) * fps
+    if t is None:
+        return (v[hi] - v[lo]) / np.maximum(hi - lo, 1) * fps
+    return (v[hi] - v[lo]) / np.maximum(t[hi] - t[lo], 1.0 / fps)
 
 
 def lane_changes(lanes, fps=FPS, hold=HOLD_S):
@@ -52,12 +55,13 @@ def lane_changes(lanes, fps=FPS, hold=HOLD_S):
 
 
 def features(rows):
+    rows = [r for i, r in enumerate(rows) if i == 0 or r["t_s"] > rows[i - 1]["t_s"]]   # frozen copies
     t = np.array([r["t_s"] for r in rows], float)
     v = np.array([r["speed_mps"] for r in rows], float)
     if t[-1] - t[0] < MIN_DURATION_S or np.median(v) < MOVING_MPS:
         return None
-    a = diff(v)
-    j = diff(a)
+    a = diff(v, t=t)
+    j = diff(a, t=t)
     lanes = [None if r["lane"] in ("", None) else int(r["lane"]) for r in rows]
     lat = np.array([np.nan if r["lateral_m"] in ("", None) else float(r["lateral_m"]) for r in rows])
     n_lc = lane_changes(lanes)
@@ -121,7 +125,9 @@ def _selfcheck():
     assert np.allclose(diff(ramp)[10:-10], 1.5)
     assert lane_changes([1] * 30 + [2] * 30) == 1
     assert lane_changes([1] * 30 + [2, 1, 2, 1] + [1] * 30) == 0
-    print("selfcheck ok (zero, ramp 1.5 m/s^2, one held lane change, flicker ignored)")
+    t31 = np.arange(90) / 31.0
+    assert np.allclose(diff(20 + 1.5 * t31, t=t31)[10:-10], 1.5)
+    print("selfcheck ok (zero, ramp 1.5 m/s^2 on 30 and 31 fps clocks, one held lane change, flicker ignored)")
 
 
 if __name__ == "__main__":

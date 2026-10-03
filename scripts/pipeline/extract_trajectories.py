@@ -37,8 +37,10 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT / p) for p in ("scripts/tracking", "scripts/object_detection", "scripts/evaluation")]
+sys.path[:0] = [str(ROOT / p) for p in ("scripts/tracking", "scripts/object_detection", "scripts/evaluation",
+                                          "scripts/pipeline")]
 import postprocess_tracks as pp   # noqa: E402
+import frame_times as ft          # noqa: E402
 import stitch_tracks as st        # noqa: E402
 from score_heading import coasted  # noqa: E402
 
@@ -137,7 +139,7 @@ def export(tracks, centres, out_dir, fps):
                     lead, spacing = oid, ahead
             moving = s["speed_mps"] > MOVING_MPS
             rows.append({
-                "frame": s["frame"], "t_s": round(s["frame"] / fps, 4),
+                "frame": s["frame"], "t_s": s.get("t_s", round(s["frame"] / fps, 4)),
                 "x_m": round(s["x"], 3), "y_m": round(s["y"], 3),
                 "along_m": round(s["x"], 3), "lane": lane, "direction": d,
                 "lateral_m": None if lat is None else round(lat, 3),
@@ -180,6 +182,15 @@ def main():
         return
     print("2. road mask")
     run([PY, "scripts/object_detection/road_mask.py", "--clip", a.clip, "--run", a.tag])
+    times = ft.load(a.clip)
+    if times is None:
+        print("   no frame_times.json: using frame / fps (run frame_times.py first)")
+    else:                                                  # a frozen copy carries no new detection
+        road_dir = det.with_name(det.name + "_road")
+        for f, (_, copy) in times.items():
+            p = road_dir / f"{f:03d}_pred.json"
+            if copy and p.exists():
+                p.write_text("[]")
     print("3. track")
     trk = ROOT / "outputs/tracking/camera-data" / f"{run_name}_road"
     run([PY, "scripts/tracking/run_ab3dmot.py", "--det-dir", det.with_name(det.name + "_road"),
@@ -188,7 +199,7 @@ def main():
     print("4. stitch")
     tracks, joined = st.stitch(d["tracks"], a.fps)
     print("5. smooth")
-    tracks = {k: pp.clean(v, a.fps) for k, v in tracks.items()}
+    tracks = {k: pp.clean(v, a.fps, times) for k, v in tracks.items()}
     tracks = {k: v for k, v in tracks.items() if len(v) >= 3}
     n_before = len(tracks)
     tracks = drop_duplicates(tracks)
@@ -210,6 +221,7 @@ def main():
         "smoothing": "RTS, constant-velocity model (rts_smooth_track.build_kf), coasted tails trimmed",
         "lanes": {"bin_m": LANE_BIN_M, "min_sep_m": MIN_LANE_SEP_M, "moving_mps": MOVING_MPS,
                   "min_states": MIN_LANE_STATES, "max_offset_m": MAX_LANE_OFFSET_M},
+        "frame_times": "frame_times.json (real timestamps, copies dropped)" if times else "frame / fps",
         "duplicates_dropped": n_dup, "dup_limits_m": [DUP_DX_M, DUP_DY_M], "min_spacing_m": MIN_SPACING_M,
         "vehicles": len(rows), "fragmentation": frag}, indent=2))
     print(f"{run_name}: {len(rows)} vehicles, {len(joined)} joins, {n_dup} duplicates dropped, lanes "

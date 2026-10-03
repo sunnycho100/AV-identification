@@ -104,3 +104,23 @@ to borrow from (2026-10)". Output: a ranked shortlist, not a switch.
 ## Log
 
 (each iteration: what changed, scorecard before and after, kept or reverted)
+
+### Iteration 1: real frame times, frozen copies dropped (2026-10-03) - kept
+
+frame_times.py matches every extracted frame to its decoded source frame and
+takes that frame's timestamp; a frame repeating the previous source frame is a
+copy. The tracker sees no detections on copies, the RTS smoother steps by real
+time and drops copy states, features differentiate by real time.
+- AV_T_WE_3 frames were cut on a ~31 fps grid (stream 31/1): frame/30 stretched
+  6.00 s to 6.23 s. GPS speed ratio 0.959 -> 0.992, speed MAE 1.18 -> 0.49 m/s.
+  The lab's GPS frame index for this clip also uses 31 fps; its video ran to
+  frame 280 (9 s), ours ends at 187, so the cut start is still unknown.
+- HV_T_EW_2: 89 copies (3.0 s hole); no track runs through it now. The lab's
+  frame index for this clip runs to 299 on a 29.97 grid, so their copy of the
+  video had no hole: ours (and the Box copy, identical) is corrupted.
+- Clean clips unchanged (their frames are on the 1/30 s grid).
+Scorecard after (baseline for iteration 2): frag_1s 0.941, accel_steady 0.703
+m/s^2, lat_std 0.085 m, follow 1.72 mph, frozen 0 (was 36 on AV_T_WE_3).
+Open: AV_T_WE_3 GPS car speed swings 27.3-29.4 m/s with range while GPS is
+steady; points at this clip's pitch (VP from 6 frames). A per-clip pitch from the
+dash ruler (spacing vs range) would test that without GPS.
