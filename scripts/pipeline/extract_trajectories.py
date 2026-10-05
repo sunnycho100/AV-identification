@@ -52,6 +52,8 @@ DEFAULTS = {
     "config": "experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py",
     "extrinsic": "metric_extrinsic_h151_dpm031.json",
     "score_thresh": 0.45, "track_low_thresh": 0.45, "max_age": 6, "fps": 30, "q_vel": 0.1,
+    "px_noise": 1.0,          # pixels of ground-point noise, turned into metres by range (0 = off)
+    "max_m_per_px": 1.0,      # drop detections where one pixel covers more road than this (near the horizon)
 }
 LANE_BIN_M, MIN_LANE_SEP_M, MOVING_MPS = 0.25, 2.5, 3.0
 MIN_LANE_STATES, MAX_LANE_OFFSET_M = 30, 2.0   # a quiet lane still counts; off every lane = no lane
@@ -192,6 +194,22 @@ def main():
             p = road_dir / f"{f:03d}_pred.json"
             if copy and p.exists():
                 p.write_text("[]")
+    cal = json.loads((det / "calibration_used.json").read_text())
+    M = np.array(cal["lidar2cam"])
+    c = -M[:3, :3].T @ M[:3, 3]                            # camera centre in the output frame
+    cam = (c[0], c[1], c[2] - cal.get("road_plane_z_in_output", -1.73))
+    f_px = cal["K"][1][1]
+    # Near the horizon one pixel spans metres of road and a fraction of a degree of
+    # pitch error stretches distances, so speeds there are not measurable: drop them.
+    r_max = float(np.sqrt(max(a.max_m_per_px * f_px * cam[2] - cam[2] ** 2, 0.0)))
+    n_far = 0
+    for p in det.with_name(det.name + "_road").glob("*_pred.json"):
+        boxes = json.loads(p.read_text())
+        keep = [b for b in boxes if np.hypot(b["x"] - cam[0], b["y"] - cam[1]) <= r_max]
+        if len(keep) < len(boxes):
+            n_far += len(boxes) - len(keep)
+            p.write_text(json.dumps(keep))
+    print(f"   usable range {r_max:.0f} m ({a.max_m_per_px} m per pixel): dropped {n_far} farther boxes")
     print("3. track")
     trk = ROOT / "outputs/tracking/camera-data" / f"{run_name}_road"
     run([PY, "scripts/tracking/run_ab3dmot.py", "--det-dir", det.with_name(det.name + "_road"),
@@ -199,8 +217,17 @@ def main():
     d = json.loads((trk / "tracks.json").read_text())
     print("4. stitch")
     tracks, joined = st.stitch(d["tracks"], a.fps)
-    print("5. smooth")
-    tracks = {k: pp.clean(v, a.fps, times, a.q_vel) for k, v in tracks.items()}
+    print("5. split impossible jumps, smooth")
+    cov = pp.footprint_cov(cam, f_px, a.px_noise) if a.px_noise > 0 else None
+    nid = max(int(k) for k in tracks) + 1
+    pieces = {}
+    for k, v in tracks.items():
+        parts = pp.split_jumps(v, a.fps, times, cov)
+        pieces[k] = parts[0]
+        for part in parts[1:]:
+            pieces[str(nid)], nid = part, nid + 1
+    n_split = len(pieces) - len(tracks)
+    tracks = {k: pp.clean(v, a.fps, times, a.q_vel, cov) for k, v in pieces.items()}
     tracks = {k: v for k, v in tracks.items() if len(v) >= 3}
     n_before = len(tracks)
     tracks = drop_duplicates(tracks)
@@ -219,10 +246,12 @@ def main():
     (out / "run.json").write_text(json.dumps({
         "clip": a.clip, "settings": cfg, "stitch": {"joins": len(joined), "time_win_s": st.TIME_WIN_S,
         "side_limit": f"{st.SIDE_NOISE_M} m + {st.SIDE_SPEED_MPS} m/s x gap", "thresh": st.STITCH_THRESH},
-        "smoothing": "RTS, constant-velocity model (rts_smooth_track.build_kf), coasted tails trimmed",
+        "smoothing": "RTS, constant-velocity model (rts_smooth_track.build_kf), coasted tails trimmed, "
+                     "measurement noise 0.5 m + px_noise pixels of ground footprint, tracks cut at jumps above v_max",
         "lanes": {"bin_m": LANE_BIN_M, "min_sep_m": MIN_LANE_SEP_M, "moving_mps": MOVING_MPS,
                   "min_states": MIN_LANE_STATES, "max_offset_m": MAX_LANE_OFFSET_M},
         "frame_times": "frame_times.json (real timestamps, copies dropped)" if times else "frame / fps",
+        "jump_splits": n_split, "v_max_mps": pp.V_MAX, "usable_range_m": round(r_max, 1), "far_boxes_dropped": n_far,
         "duplicates_dropped": n_dup, "dup_limits_m": [DUP_DX_M, DUP_DY_M], "min_spacing_m": MIN_SPACING_M,
         "vehicles": len(rows), "fragmentation": frag}, indent=2))
     print(f"{run_name}: {len(rows)} vehicles, {len(joined)} joins, {n_dup} duplicates dropped, lanes "

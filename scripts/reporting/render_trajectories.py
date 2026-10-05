@@ -33,7 +33,7 @@ def draw_states(img, states, k34, l2c, mark):
         col = ORANGE if tid == mark else GREEN
         draw_box_3d(img, pts, c=col)
         u, v = int(pts[:, 0].min()), int(pts[:, 1].min()) - 6
-        label = f"{'GPS? ' if tid == mark else ''}{tid} {s['speed_mps'] * MPH:.0f} mph"
+        label = f"{'GPS? ' if tid == mark else ''}#{tid}  {s['speed_mps'] * MPH:.0f} mph"
         cv2.putText(img, label, (u, v), 0, 0.6, (0, 0, 0), 4)
         cv2.putText(img, label, (u, v), 0, 0.6, col, 2)
 
