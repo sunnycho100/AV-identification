@@ -3,7 +3,7 @@ clip's frames and write an mp4: one box per vehicle with its id and speed in mph
 instrumented vehicle (instrumented.json, or --mark) in orange.
 
 Track states carry position, heading and speed but no box size, so every box is
-drawn at a typical car size (ponytail: fixed 4.6 x 1.9 x 1.5 m; trucks look short).
+drawn at a typical car size (note: fixed 4.6 x 1.9 x 1.5 m; trucks look short).
 
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/reporting/render_trajectories.py --clip AV_T_WE_3
 """

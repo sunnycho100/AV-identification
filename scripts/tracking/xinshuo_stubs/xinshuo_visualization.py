@@ -1,5 +1,5 @@
 """Minimal stub for AB3DMOT's xinshuo_visualization dependency (only random_colors, used in
-the vis path we don't call but which model.py imports at module load). ponytail: stub."""
+the vis path we don't call but which model.py imports at module load). note: stub."""
 
 
 def random_colors(N, bright=True):

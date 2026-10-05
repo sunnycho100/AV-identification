@@ -125,7 +125,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # ponytail: self-check on the clip the template came from — must find the known run
+    # note: self-check on the clip the template came from — must find the known run
     import sys
     if "--frames-dir" not in " ".join(sys.argv):
         pf = match_frames(ROOT / "data/camera-data/AV_T_EW_3/frames_all", build_template())

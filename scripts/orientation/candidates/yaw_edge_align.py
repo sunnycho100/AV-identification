@@ -146,7 +146,7 @@ def edge_scores(box, yaws, grad, K, lidar2cam, samples=SAMPLES,
     t = np.linspace(0.0, 1.0, samples)[None, None, :, None]
     p = a[:, :, None, :] + (b - a)[:, :, None, :] * t
     h, w = grad.shape[:2]
-    # ponytail: nearest-pixel sampling, bilinear buys nothing on a blurred
+    # note: nearest-pixel sampling, bilinear buys nothing on a blurred
     # gradient field; swap it in if sub-pixel edges ever matter
     u = np.rint(p[..., 0]).astype(int)
     v = np.rint(p[..., 1]).astype(int)

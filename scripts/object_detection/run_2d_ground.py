@@ -19,7 +19,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 COCO = {3: "car", 6: "bus", 8: "truck"}
-L, W, H = 4.5, 1.8, 1.5       # ponytail: one size for all; per-class sizes if trucks matter
+L, W, H = 4.5, 1.8, 1.5       # note: one size for all; per-class sizes if trucks matter
 
 
 def ground_point(u, v, K, R, t):

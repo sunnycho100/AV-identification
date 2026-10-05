@@ -2,7 +2,7 @@
 
 Date: 2026-09-15. Scope: methods that make per-frame 3D box yaw consistent across
 video frames, for monocular and roadside 3D detection. Written for the orientation
-research loop in `docs/superpowers/specs/2026-09-15-orientation-research-loop-design.md`.
+research loop.
 
 ## Why this survey exists
 

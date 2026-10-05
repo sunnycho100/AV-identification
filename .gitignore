@@ -71,3 +71,4 @@ CLAUDE.md
 # Reference papers (PDFs kept locally, not committed)
 *.pdf
 data/svbrd/
+docs/superpowers/

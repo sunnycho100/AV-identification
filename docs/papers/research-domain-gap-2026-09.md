@@ -2,8 +2,8 @@
 
 Literature review, September 2026. Scope: why a BEVHeight checkpoint trained on
 DAIR-V2X-I degrades on our footage, what the published work offers, and which of
-it is worth spending a week on. Companion note to
-`docs/superpowers/specs/2026-09-15-orientation-research-loop-design.md` (batch 2).
+it is worth spending a week on. Companion note to the orientation research loop
+(batch 2).
 
 No code was modified while writing this.
 
@@ -278,7 +278,7 @@ Waymo/nuScenes/Lyft.
   moves, rather than memorising ours.
 - Yaw: indirect, mainly a regulariser against re-overfitting when we fine-tune.
 - Depth bias: scale-invariant depth is the principled version of what candidate 2
-  hacks at inference.
+  approximates at inference.
 - Cost: low to medium once we are already fine-tuning.
 
 ### 2.9 Zhou et al., WARM-3D, 2024 (TUMTraf)
@@ -571,7 +571,7 @@ How to do it properly, cheapest first.
    problem worth a method. Free, one script over existing outputs.
 2. **Filter in BEV, not in the image.** Drop boxes whose BEV footprint lies
    outside the drivable polygon for this site. Post-hoc, reversible, zero effect on
-   the network, no recall loss on the main road. This is the ponytail answer and it
+   the network, no recall loss on the main road. This is the simplest option and it
    captures most of the practical value.
 3. **If off-plane vehicles must be detected correctly, go per-region.** Give
    `height2localtion` a per-region `reference_height` (MonoGAE's idea, minus the

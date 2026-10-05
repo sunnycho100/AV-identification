@@ -82,7 +82,7 @@ def load_gt(csv_path, heading_col=None):
             elif not heading_col.endswith("_rad") and abs(h) > 2 * math.pi:
                 h = math.radians(h)
         else:
-            # ponytail: fallback while the heading column is missing. Course over
+            # note: fallback while the heading column is missing. Course over
             # ground from the GT velocity, in the same (x east, y south) frame as
             # processed_x/y. Not the same as vehicle heading under any slip, so it
             # is labelled as a fallback in the output.

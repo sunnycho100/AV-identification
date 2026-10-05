@@ -4,7 +4,7 @@ d3d (cmpute/d3d) is a compiled CUDA package that does not build on the Mac.
 Inference only needs rotated-box IoU and NMS, so these use OpenCV's exact
 rotated-rectangle intersection. Boxes are (N, 5) x, y, w, h, angle in radians.
 
-ponytail: O(n^2) Python loop, fine for tens of boxes per frame; swap in a
+note: O(n^2) Python loop, fine for tens of boxes per frame; swap in a
 vectorised rotated IoU if it ever runs on dense scenes.
 """
 import math

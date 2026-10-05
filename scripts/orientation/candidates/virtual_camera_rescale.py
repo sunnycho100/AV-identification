@@ -8,7 +8,7 @@ post-process here, this module only hands the scorer the rerun's own yaws.
 
     run_candidate.py virtual_camera_rescale --cfg suffix=vcam
 
-ponytail: identical in body to `identity`. Kept as its own file so the ledger
+note: identical in body to `identity`. Kept as its own file so the ledger
 row carries the candidate's name and this explanation rather than "identity with
 a suffix".
 """

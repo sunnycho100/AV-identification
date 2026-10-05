@@ -2,8 +2,7 @@
 
 One line per run suffix: speed ratio, chord ratio, rigid RMSE, along-ray error
 by range band, heading axis error. Appends to the calibration-loop ledger
-(outputs/evaluation/calibration_loop_ledger.csv) so results survive a context
-reset. See docs/superpowers/plans/2026-09-30-site-calibration-loop.md.
+(outputs/evaluation/calibration_loop_ledger.csv) so results are kept across runs.
 
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/evaluation/grade_calibration_candidate.py \
         --clip AV_T_EW_3 --runs phase1 h156 trafcam trafcam_h156 --label "h15.1 dp-0.31"

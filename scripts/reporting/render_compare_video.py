@@ -33,7 +33,7 @@ from evaluators.result2kitti import get_lidar_3d_8points
 from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 import score_heading as sh
 
-# ponytail: run names follow the disk while phase1 is being regenerated; the old
+# note: run names follow the disk while phase1 is being regenerated; the old
 # 102.4 run is phase1_102 once moved, phase1 before that, and r140 is the 140.8 run.
 OLD = "phase1_102" if (ROOT / "outputs/tracking/camera-data/AV_T_EW_3_phase1_102").exists() else "phase1"
 PANELS = [("102.4 m checkpoint, raw boxes", OLD, None),

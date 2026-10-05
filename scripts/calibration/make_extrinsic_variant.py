@@ -41,8 +41,7 @@ def main():
     (cal / a.out_name).write_text(json.dumps({
         "rotation": R.tolist(), "translation": t.tolist(),
         "note": f"{a.base} rotation with pitch {a.dpitch_deg:+.3f} deg, roll {a.droll_deg:+.3f} deg "
-                f"(camera frame), height {a.height} m. Calibration-loop variant, see "
-                f"docs/superpowers/plans/2026-09-30-site-calibration-loop.md",
+                f"(camera frame), height {a.height} m. Calibration-loop variant",
         "diagnostics": {"height_m": a.height, "dpitch_deg": a.dpitch_deg, "droll_deg": a.droll_deg,
                         "base": a.base}}, indent=2))
     print(f"wrote {cal / a.out_name}")

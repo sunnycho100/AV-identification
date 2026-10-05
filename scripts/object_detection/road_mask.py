@@ -32,7 +32,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 ROAD_X = (5.0, 3000.0)        # far end runs out toward the vanishing point
-ROAD_Y = (-39.0, -1.0)          # ponytail: Todd Drive only; another site needs its own band
+ROAD_Y = (-39.0, -1.0)          # note: Todd Drive only; another site needs its own band
 
 
 def road_polygon(K, M, z):

@@ -1,5 +1,5 @@
 """Minimal stubs for AB3DMOT's xinshuo_io dependency.
-Only the functions our tracking path actually imports. ponytail: stub, not the real toolbox."""
+Only the functions our tracking path actually imports. note: stub, not the real toolbox."""
 import os
 
 

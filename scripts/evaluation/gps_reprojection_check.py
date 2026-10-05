@@ -197,7 +197,7 @@ def analyse(clip):
 def render(clip, rows, out_dir):
     """4 frames spread across the track: the raw box, and the GPS point as a disc."""
     import cv2
-    # ponytail: evaluators.result2kitti has the same corner helper but importing it
+    # note: evaluators.result2kitti has the same corner helper but importing it
     # pulls in numba, which .venv does not have. Five lines instead of a GPU stack.
     from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 

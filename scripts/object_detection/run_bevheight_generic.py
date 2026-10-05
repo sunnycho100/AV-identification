@@ -80,7 +80,7 @@ def to_dair_ground(lidar2cam):
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 if DEVICE == "cuda":
-    # ponytail: the lab server's torch 1.9 cusolver cannot create a handle
+    # note: the lab server's torch 1.9 cusolver cannot create a handle
     # (CUSOLVER_STATUS_INTERNAL_ERROR on a bare 4x4 inverse). The model only
     # inverts small calibration matrices, so route those through the CPU. Drop
     # this shim once the server env is rebuilt on a torch with a working cusolver.

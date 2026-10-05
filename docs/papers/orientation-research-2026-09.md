@@ -2,8 +2,7 @@
 
 Date: 2026-09-15. Merges the three arm notes (`research-temporal-yaw-2026-09.md`,
 `research-2d-cue-yaw-2026-09.md`, `research-domain-gap-2026-09.md`) into one ranked
-list behind the frozen scorer in
-`docs/superpowers/specs/2026-09-15-orientation-research-loop-design.md`.
+list behind a fixed orientation scorer.
 
 Measured state that overrides the three source notes where they conflict: the scorer
 grades **raw detection yaw**, baseline mean median folded error 8.88 deg over 5 Todd

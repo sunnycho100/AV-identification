@@ -9,7 +9,7 @@ untouched, so the extrinsic carries over verbatim and only K moves.
     fx' = fx * sx,  cx' = (cx - x0) * sx      sx = 1920 / crop_w
     fy' = fy * sy,  cy' = (cy - y0) * sy      sy = 1080 / crop_h
 
-ponytail: one centre crop, not the 2 to 3 overlapping tiles the source note
+note: one centre crop, not the 2 to 3 overlapping tiles the source note
 proposes. Vehicles outside the crop are lost and edge recall drops; that is the
 accepted cost for a first signal. Add tiling + NMS merge only if the folded
 error actually moves.
