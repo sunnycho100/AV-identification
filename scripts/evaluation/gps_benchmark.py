@@ -125,9 +125,9 @@ def visibility(c, T, tau=0.0):
             "seconds_to_cross_view": round((VIEW_X[1] - VIEW_X[0]) / float(np.median(c["gps"]["v"])), 2)}
 
 
-def bench(clip, T):
-    c = g2i.load_clip(clip)
-    lanes = json.loads((ROOT / "outputs/trajectories" / f"{clip}_ft102" / "lanes.json").read_text())["centres_by_direction"]
+def bench(clip, T, tag="ft102"):
+    c = g2i.load_clip(clip, tag)
+    lanes = json.loads((ROOT / "outputs/trajectories" / f"{clip}_{tag}" / "lanes.json").read_text())["centres_by_direction"]
     out = {"clip": clip, "role": ROLE.get(clip, "held out"),
            "site_transform": {"from_clips": T["clips"], "road_bearing_enu_deg": round(math.degrees(T["phi"]), 3)},
            "visibility_lab_timing": visibility(c, T)}
@@ -220,13 +220,14 @@ def _selfcheck():
 def main():
     ap = argparse.ArgumentParser("GPS benchmark per clip")
     ap.add_argument("--clips", nargs="+", default=list(CLIPS))
+    ap.add_argument("--tag", default="ft102")   # another detector; the site transform stays the ft102 one
     a = ap.parse_args()
     T = g2i.load_site()
-    out = ROOT / "outputs/evaluation/gps_benchmark"
+    out = ROOT / "outputs/evaluation" / ("gps_benchmark" if a.tag == "ft102" else f"gps_benchmark_{a.tag}")
     out.mkdir(parents=True, exist_ok=True)
     res = []
     for clip in a.clips:
-        r = bench(clip, T)
+        r = bench(clip, T, a.tag)
         r["site_transform"]["calibration_clip_offsets_road_m"] = {k: [round(x, 2) for x in v]
                                                                   for k, v in T["per_clip_offset_road_m"].items()}
         (out / f"{clip}.json").write_text(json.dumps(r, indent=2))
