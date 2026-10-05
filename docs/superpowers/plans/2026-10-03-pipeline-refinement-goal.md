@@ -170,3 +170,33 @@ road is timing-free; along the road each clip gets one reported offset tau.
   with AV_T_EW_3's offset it lands on vehicle 33 just before the hole. Needs a
   person to confirm; at most 7 frames gradable at ~95 m.
 Ask the lab: the recording start times (recording_log) behind each 10 s clip.
+
+### Advisor update and MonoUNI plan (2026-10-04)
+
+Hang (reply received 2026-10-04): BEVHeight stays high priority, but he and Bofeng
+think the highway's changing elevation hurts it; asked to run MonoUNI
+(github.com/Traffic-X/MonoUNI, NeurIPS 2023) and compare with BEVHeight. Also
+asked to try our method on the Waymo-based data of arXiv 2511.14977 (similar
+goal, simpler method). Hang will work on BEVHeight masking and the AV
+identification model. Sunny replied he will compare MonoUNI and read the paper.
+
+MonoUNI facts checked in its code (clone in the session scratchpad):
+- Image-space detector (DLA-34, CenterNet/GUPNet style), predicts a depth with
+  focal length and pitch divided out ("normalized depth"), recovered with the
+  known pitch. Reads only the ground normal from denorm/*.txt
+  (rope3d_utils.Denorm: pitch from de_norm[1:3]); the plane offset (camera
+  height) is never used. No BEV grid, so no 102/140 m cap. 4 classes incl.
+  big_vehicle. Rope3D images are 1920x1080 like ours.
+- Needs per frame: image_2/<id>.jpg, calib/<id>.txt (P2 from AnyCalib K),
+  denorm/<id>.txt (ground plane in camera frame from our VP rotation),
+  ImageSets/val.txt. Tester expects Rope3D labels: write a label-free inference
+  script.
+- Env: Python 3.8, torch 1.5 (try the lab bevheight env, torch 1.9, first).
+- Checkpoint: Rope3D only, Baidu Pan (code g86j). Sunny to get it (Baidu account)
+  or ask Hang or Bofeng.
+- Output is camera-frame KITTI boxes; to road frame with R^T only (height adds a
+  constant z), then the same road mask, tracker, smoother, GPS benchmark.
+Comparison (zero-shot both): held-out AV_T_EW_3 share of GPS-car frames with a box
+within 2 m, split 15-100 m and 100-140 m; speed, heading, accel vs GPS; GPS-free
+scorecard on all clips. Detector shortlist note in the vault: "Roadside monocular
+3D detector shortlist (2026-10)" (MonoUNI, CoBEV, 2D + ground plane).
