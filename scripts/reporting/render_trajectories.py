@@ -21,6 +21,23 @@ ORANGE, GREEN = (0, 140, 255), (0, 220, 0)
 MPH = 2.23694
 
 
+def draw_states(img, states, k34, l2c, mark):
+    """Boxes with id and mph for one frame's (track id, state) pairs; mark in orange."""
+    for tid, s in states:
+        yaw = math.atan2(s["vy"], s["vx"]) if s["speed_mps"] > 1 else s["yaw"]
+        c = get_lidar_3d_8points([L, W, H], yaw, [s["x"], s["y"], s["z"] + H / 2])
+        cc = (l2c @ np.c_[c, np.ones(8)].T).T[:, :3]
+        if np.sum(cc[:, 2] > 1e-6) < 4:
+            continue
+        pts = project_to_image(cc, k34)
+        col = ORANGE if tid == mark else GREEN
+        draw_box_3d(img, pts, c=col)
+        u, v = int(pts[:, 0].min()), int(pts[:, 1].min()) - 6
+        label = f"{'GPS? ' if tid == mark else ''}{tid} {s['speed_mps'] * MPH:.0f} mph"
+        cv2.putText(img, label, (u, v), 0, 0.6, (0, 0, 0), 4)
+        cv2.putText(img, label, (u, v), 0, 0.6, col, 2)
+
+
 def main():
     ap = argparse.ArgumentParser("Render extracted trajectories")
     ap.add_argument("--clip", required=True)
@@ -43,19 +60,7 @@ def main():
     frames = sorted((ROOT / f"data/camera-data/{a.clip}/frames_all").glob("*.jpg"))
     for i, f in enumerate(frames):
         img = cv2.imread(str(f))
-        for tid, s in by_frame.get(i, []):
-            yaw = math.atan2(s["vy"], s["vx"]) if s["speed_mps"] > 1 else s["yaw"]
-            c = get_lidar_3d_8points([L, W, H], yaw, [s["x"], s["y"], s["z"] + H / 2])
-            cc = (l2c @ np.c_[c, np.ones(8)].T).T[:, :3]
-            if np.sum(cc[:, 2] > 1e-6) < 4:
-                continue
-            pts = project_to_image(cc, k34)
-            col = ORANGE if tid == mark else GREEN
-            draw_box_3d(img, pts, c=col)
-            u, v = int(pts[:, 0].min()), int(pts[:, 1].min()) - 6
-            label = f"{'GPS? ' if tid == mark else ''}{tid} {s['speed_mps'] * MPH:.0f} mph"
-            cv2.putText(img, label, (u, v), 0, 0.6, (0, 0, 0), 4)
-            cv2.putText(img, label, (u, v), 0, 0.6, col, 2)
+        draw_states(img, by_frame.get(i, []), k34, l2c, mark)
         cv2.putText(img, f"{run} frame {i}  marked car: {mark or 'none'}", (20, 40), 0, 1.0, (255, 255, 255), 3)
         cv2.imwrite(str(out / f"{i:03d}.jpg"), img)
     mp4 = out / f"{run}_trajectories.mp4"
