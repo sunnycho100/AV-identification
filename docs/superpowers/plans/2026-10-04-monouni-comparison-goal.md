@@ -164,3 +164,25 @@ changes. Same metrics as P3. This answers what 3D detection buys us.
 
 ## Log
 (empty)
+
+### 2026-10-04 run 1 (autonomous)
+- P1 done: monouni_prep.py (A as is, B zoom 1.48, focal 2210-2396 px per clip,
+  pitch 18.0-18.9 deg, denorm d 15.10 m), monouni_to_road.py (ry lifted back onto
+  the road plane; round-trip check 1 cm, 0.1 deg). Commit 35b239a.
+- P2 done: no new env needed. The bevheight env (py3.8, torch 1.9 cu111) runs
+  MonoUNI through run_monouni.py (no NCCL, no labels); random-weight run wrote
+  300 of 300 frames. Lab root disk is full (1.3 GB free): MonoUNI clone and roots
+  live in /home/data/scho242/ (MonoUNI, monouni/<clip>_<A|B>, all 5 clips prepped).
+- P3 blocked: no checkpoint. Fallback (train on DAIR-V2X-I) not possible as is:
+  the lab holds only a 71-frame DAIR sample; the full set is a large download.
+- P4 done: run_2d_ground.py (torchvision Faster R-CNN COCO + ground plane),
+  tag det2d, all 5 clips; gps_benchmark.py --tag; compare_detectors.py. Commit 7b969b9.
+  Coverage within 2 m: ft102 78/83/1% at 15-60/60-100/100-140 m, det2d 93/95/57%.
+  Held-out AV_T_EW_3: ft102 speed ratio 1.00, 0.16 mph MAE, accel rms 0.14 (GPS
+  0.12); det2d 0.91, 6.0 mph, 1.37. Scorecard accel_steady 0.25 vs 0.88.
+  BEVHeight along error stays within +0.1 to +0.4 m up to 140 m where it detects,
+  so no sign of a range-growing (elevation) bias in its matched boxes.
+- P5 done: render_compare_detectors.py, videos for all 5 clips (ft102 vs det2d).
+  Commit 2fe76ac.
+- P6 waiting for the user's yes to download 10 clips (~0.3 GB).
+- P7 interim: outputs/reports/monouni_compare/summary.md.
