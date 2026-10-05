@@ -32,7 +32,7 @@ import trajectory_features as tf   # noqa: E402
 CLIPS = ("SV_355", "SV_366", "SV_373", "SV_382", "SV_407", "SV_411")
 LABEL_TAG = "det2d"
 OUT = ROOT / "outputs/reports/svbrd"
-MIN_S, MOVING_MPS, MIN_TRAVEL_M, MATCH_M, FPS = 3.0, 2.0, 10.0, 2.5, 30.0
+MIN_S, MOVING_MPS, MIN_TRAVEL_M, MATCH_M, MIN_MATCH, FPS = 3.0, 2.0, 10.0, 2.5, 15, 30.0
 MPH = 2.23694
 
 
@@ -78,11 +78,13 @@ def features(t):
 
 
 def match(ref, T):
-    """Track in T that sits within MATCH_M of ref in the most shared frames."""
+    """Track in T that sits within MATCH_M of ref in the most shared frames, or None
+    when none does for MIN_MATCH frames (the detector missed that car)."""
     rf = {s["frame"]: (s["x"], s["y"]) for s in ref}
-    best = max(T.items(), key=lambda kv: sum(1 for s in kv[1] if s["frame"] in rf
-                                             and np.hypot(s["x"] - rf[s["frame"]][0], s["y"] - rf[s["frame"]][1]) < MATCH_M))
-    return best[0]
+    n = {k: sum(1 for s in t if s["frame"] in rf and np.hypot(s["x"] - rf[s["frame"]][0], s["y"] - rf[s["frame"]][1]) < MATCH_M)
+         for k, t in T.items()}
+    k = max(n, key=n.get)
+    return k if n[k] >= MIN_MATCH else None
 
 
 def table(tags):
@@ -95,7 +97,7 @@ def table(tags):
             av = set(labels.get(clip, []))
             if tag != LABEL_TAG:
                 ref = tracks(clip, LABEL_TAG)
-                av = {match(ref[i], T) for i in av}
+                av = {match(ref[i], T) for i in av} - {None}
             for k, t in moving(T).items():
                 rows.append({"clip": clip, "id": k, "av": k in av, **features(t)})
         res[tag] = rows

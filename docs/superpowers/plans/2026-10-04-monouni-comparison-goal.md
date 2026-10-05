@@ -186,3 +186,18 @@ changes. Same metrics as P3. This answers what 3D detection buys us.
   Commit 2fe76ac.
 - P6 waiting for the user's yes to download 10 clips (~0.3 GB).
 - P7 interim: outputs/reports/monouni_compare/summary.md.
+
+### 2026-10-04 run 2
+- P3 partial: BEVHeight 140.8 m fine-tune (run4_v2labels_140, tag ft140) on the 5
+  Todd clips. Coverage 80/66/5% (15-60/60-100/100-140 m), held-out 0.81 mph, accel
+  0.24. MonoUNI weights link reports the files deleted (user, 2026-10-04); asking
+  Hang. Fallback training needs the user's go-ahead.
+- P6 done on a sample: 10 day clips downloaded (approved), 6 share one pose
+  (SV_355, 366, 373, 382, 407, 411). svbrd_calibrate.py: median VP pitch 16.2 deg,
+  height 21.0 m by car-size fit (49,922 boxes); per-clip lane spacing unusable.
+  Waymo labels (det2d ids): SV_355 83 273 366, SV_366 198, SV_373 171 321,
+  SV_382 145 497, SV_407 4 438. svbrd_av_features.py: accel std Waymo vs other
+  1.08/0.77 (det2d), 0.69/0.56 (BEVHeight pretrained), 0.57/0.36 (Todd fine-tune);
+  paper 0.31/0.53. BEVHeight finds 24-46 moving cars where 2D finds 118.
+- Note: AnyCalib re-downloaded its weights (1.19 GB) during calibration; this
+  crossed the 1 GB stop rule and was not caught beforehand.
