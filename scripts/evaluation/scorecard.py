@@ -2,8 +2,11 @@
 
 Per run (outputs/trajectories/<clip>_<tag>):
   frag_1s       share of states in tracks of at least 1 s (run.json)
-  accel_steady  median rms acceleration of cars without a lane change, m/s^2
-                (lower is smoother; real highway cruising is ~0.1-0.2)
+  accel_steady  median rms acceleration of cars without a lane change, m/s^2.
+                A target band, not lower-is-better: real highway cruising is ~0.1-0.2,
+                and below ~0.1 the smoother is erasing real speed changes (the
+                2026-10-06 audit: it keeps falling as smoothing grows while GPS
+                agreement gets worse). Reported with accel_band: low, ok or high.
   lat_std       median lateral std within a lane, m
   follow_mph    median |follower - leader| speed at spacing under 40 m, mph
                 (cars following closely move at nearly the same speed)
@@ -31,6 +34,13 @@ import frame_times as ft           # noqa: E402
 
 CLIPS = ("AV_T_EW_3", "HV_T_EW_1", "AV_T_WE_1", "AV_T_WE_3", "HV_T_EW_2")
 MPH = 2.23694
+
+
+ACCEL_BAND = (0.1, 0.2)   # m/s^2, real steady highway driving
+
+
+def band(a):
+    return None if a is None else "low" if a < ACCEL_BAND[0] else "high" if a > ACCEL_BAND[1] else "ok"
 
 
 def score(clip, tag):
@@ -62,6 +72,7 @@ def score(clip, tag):
     return {"clip": clip, "vehicles": len(feats),
             "frag_1s": round(run["fragmentation"]["states_in_tracks_1s_plus"], 3),
             "accel_steady": round(float(np.median(steady)), 3) if steady else None,
+            "accel_band": band(float(np.median(steady))) if steady else None,
             "lat_std": round(float(np.median(lat)), 3) if lat else None,
             "follow_mph": round(float(np.median(gaps)), 2) if gaps else None,
             "frozen": frozen,
@@ -79,6 +90,7 @@ def main():
     keys = ("frag_1s", "accel_steady", "lat_std", "follow_mph", "resid_m", "resid_ac1")
     mean = {k: round(float(np.mean([r[k] for r in rows if r[k] is not None])), 3) for k in keys}
     mean["frozen"] = sum(r["frozen"] for r in rows)
+    mean["accel_band"] = band(mean["accel_steady"])
     if a.json:
         print(json.dumps({"tag": a.tag, "rows": rows, "mean": mean}))
         return

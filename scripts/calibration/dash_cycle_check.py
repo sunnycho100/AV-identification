@@ -10,9 +10,13 @@ how it changes with range shows a pitch error.
 
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/calibration/dash_cycle_check.py AV_T_EW_3 out.jpg
 Writes out.jpg (detected dashes in red, lateral position in yellow) and out.json.
+Lines whose dashes sit off the fitted 15.24 m lattice by more than RESID_MAX m rms are
+left out of the summary: they are solid lines or two lines merged, and on 2026-10-06
+they pulled the pooled median from 15.24 to 14.91 m.
 """
 import json, glob, sys, numpy as np, cv2
 CLIP, OUT = sys.argv[1], sys.argv[2]
+RESID_MAX = 1.0   # m, lattice residual rms above which a line is not a dashed lane line
 cal=f"outputs/calibration/camera-data/{CLIP}/"
 k=json.load(open(glob.glob(cal+"*_anycalib_pinhole_pinhole.json")[0]))["prediction"]["intrinsics"][:4]
 K=np.array([[k[0],0,k[2]],[0,k[1],k[3]],[0,0,1]])
@@ -81,7 +85,7 @@ for grp in groups:
 cv2.imwrite(OUT,vis)
 summ={}
 for name,rows in res.items():
-    rows=[r for r in rows if r["n"]>=4]
+    rows=[r for r in rows if r["n"]>=4 and r["resid_rms"]<=RESID_MAX]
     A=np.array([c for r in rows for c in r["cycles"]]).reshape(-1,2)
     band=lambda lo,hi:(round(float(np.median(A[(A[:,0]>=lo)&(A[:,0]<hi),1])),2) if ((A[:,0]>=lo)&(A[:,0]<hi)).any() else None,int(((A[:,0]>=lo)&(A[:,0]<hi)).sum()))
     wmean=lambda R_:round(float(np.average([r["period"] for r in R_],weights=[r["n"]-1 for r in R_])),3) if R_ else None

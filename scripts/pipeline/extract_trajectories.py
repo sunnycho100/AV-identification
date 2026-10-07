@@ -244,7 +244,10 @@ def main():
     (out / "tracks.json").write_text(json.dumps({"meta": d["meta"], "tracks": tracks}))
     frag = st.fragmentation(tracks, a.fps)
     (out / "run.json").write_text(json.dumps({
-        "clip": a.clip, "settings": cfg, "stitch": {"joins": len(joined), "time_win_s": st.TIME_WIN_S,
+        "clip": a.clip, "settings": cfg,
+        # what actually produced the boxes (settings.ckpt is only the default when detections already existed)
+        "detections_from": {k: cal.get(k) for k in ("detector", "checkpoint", "config", "extrinsic_json")
+                            if cal.get(k) is not None}, "stitch": {"joins": len(joined), "time_win_s": st.TIME_WIN_S,
         "side_limit": f"{st.SIDE_NOISE_M} m + {st.SIDE_SPEED_MPS} m/s x gap", "thresh": st.STITCH_THRESH},
         "smoothing": "RTS, constant-velocity model (rts_smooth_track.build_kf), coasted tails trimmed, "
                      "measurement noise 0.5 m + px_noise pixels of ground footprint, tracks cut at jumps above v_max",
