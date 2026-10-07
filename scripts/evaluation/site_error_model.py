@@ -84,10 +84,24 @@ def rms(x):
     return float(np.sqrt(np.mean(np.square(x))))
 
 
+WGS84_E2 = 6.69437999014e-3   # first eccentricity squared
+
+
+def radii(lat0):
+    """WGS84 meridian (north) and prime-vertical (east) radii of curvature at lat0, m.
+    Using the equatorial radius for both, as this file did before 2026-10-06, made
+    east distances 0.16% short and north 0.20% long at Madison (0.2 m rms, 0.5 m at
+    300 m against pymap3d.geodetic2enu)."""
+    w = 1 - WGS84_E2 * math.sin(math.radians(lat0)) ** 2
+    return R_EARTH * (1 - WGS84_E2) / w ** 1.5, R_EARTH / math.sqrt(w)
+
+
 def enu_from_latlon(lat, lon, lat0, lon0):
-    """Local tangent plane in metres. Paths are under 300 m, so this is exact enough."""
-    e = R_EARTH * np.radians(np.asarray(lon) - lon0) * math.cos(math.radians(lat0))
-    n = R_EARTH * np.radians(np.asarray(lat) - lat0)
+    """Local tangent plane in metres, ellipsoidal radii at lat0. Over this 300 m site it
+    matches pymap3d.geodetic2enu within 1 cm (height is ignored: 5 m moves it 0.2 mm)."""
+    M, N = radii(lat0)
+    e = N * np.radians(np.asarray(lon) - lon0) * math.cos(math.radians(lat0))
+    n = M * np.radians(np.asarray(lat) - lat0)
     return e, n
 
 
@@ -302,8 +316,9 @@ def standalone(c, lat0, lon0):
     m = free_mask([c])
     m[P_LX:] = False
     th = fit([c], free=m)["theta"]
-    lat = lat0 + math.degrees(th[1] / R_EARTH)
-    lon = lon0 + math.degrees(th[0] / (R_EARTH * math.cos(math.radians(lat0))))
+    M, N = radii(lat0)
+    lat = lat0 + math.degrees(th[1] / M)
+    lon = lon0 + math.degrees(th[0] / (N * math.cos(math.radians(lat0))))
     ev = evaluate(th, c, ~c["invalid"])
     return {"C_e": float(th[0]), "C_n": float(th[1]),
             "camera_lat": float(lat), "camera_lon": float(lon),
