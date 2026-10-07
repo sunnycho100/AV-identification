@@ -93,9 +93,11 @@ if DEVICE == "cuda":
     torch.inverse = _cpu_inverse
 
 
-def run_frame(model, image_path, K, lidar2cam, exp, score_thresh=SCORE_THRESH):
+def run_frame(model, image_path, K, lidar2cam, exp, score_thresh=SCORE_THRESH, feat_mask=None):
     img_tensor, mats_dict, img_meta = build_mats_dict(
         str(image_path), K, lidar2cam, exp.final_dim, exp.img_conf)
+    if feat_mask is not None:          # (fH, fW) grid, see mask_input_frames.py --feature
+        mats_dict["feat_mask"] = torch.as_tensor(feat_mask, dtype=torch.float32)[None, None]
     img_tensor = img_tensor.to(DEVICE)
     mats_dict = {k: v.to(DEVICE) if torch.is_tensor(v) else v for k, v in mats_dict.items()}
     img_meta["box_type_3d"] = LiDARInstance3DBoxes
@@ -151,6 +153,8 @@ def main():
                     help=f"keep detections scoring at least this (default {SCORE_THRESH}, "
                          "upstream's export threshold)")
     ap.add_argument("--limit", type=int, default=None, help="max frames to process")
+    ap.add_argument("--feat-mask", default=None,
+                    help="feature_mask.npy: drop off-road feature cells before the BEV projection")
     ap.add_argument("--no-ground-shift", action="store_true",
                     help="feed the extrinsic as-is; use for extrinsics that "
                          "already follow the DAIR convention (e.g. DAIR's own)")
@@ -194,12 +198,14 @@ def main():
         "anycalib_json": str(args.anycalib_json),
         "extrinsic_json": str(args.extrinsic_json),
         "score_thresh": args.score_thresh,
+        "feat_mask": args.feat_mask,
         "ground_shift_applied_m": 0.0 if args.no_ground_shift else -DAIR_GROUND_Z,
         "road_plane_z_in_output": 0.0 if args.no_ground_shift else DAIR_GROUND_Z,
         "K": K.tolist(), "lidar2cam": lidar2cam.tolist(),
     }, indent=2))
+    feat_mask = np.load(args.feat_mask) if args.feat_mask else None
     for f in frames:
-        preds = run_frame(model, f, K, lidar2cam, exp, args.score_thresh)
+        preds = run_frame(model, f, K, lidar2cam, exp, args.score_thresh, feat_mask)
         (out_dir / f"{f.stem}_pred.json").write_text(json.dumps(preds, indent=2))
         render_annotated(f, preds, K, lidar2cam, out_dir / f"{f.stem}_annotated.jpg")
         cars = [d for d in preds if d["class_name"] == "car"]

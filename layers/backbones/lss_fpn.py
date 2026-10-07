@@ -456,7 +456,11 @@ class LSSFPN(nn.Module):
             img_feat_with_height.shape[3],
             img_feat_with_height.shape[4],
         )
-        
+        if 'feat_mask' in mats_dict:
+            # (B, num_cams, fH, fW), 1 on the road deck and 0 elsewhere: off-deck
+            # cells still shape the image features but are not placed on the BEV map
+            img_feat_with_height = img_feat_with_height * mats_dict['feat_mask'][:, :, None, None]
+
         geom_xyz = self.get_geometry(
             mats_dict['sensor2ego_mats'][:, sweep_index, ...],
             mats_dict['sensor2virtual_mats'][:, sweep_index, ...],

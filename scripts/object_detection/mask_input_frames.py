@@ -13,6 +13,11 @@ zeros, so the mask adds no edges of its own beyond the road boundary.
 Writes data/camera-data/<clip>/frames_masked/ and, for review,
 outputs/calibration/camera-data/<clip>/input_mask.png and input_mask_preview.jpg.
 
+--feature instead writes feature_mask.npy for the other option: the image stays
+whole and lss_fpn.py zeroes the off-deck cells of the 54 x 96 feature grid (one
+cell = 16 px of the 1536 x 864 network input) just before they are placed on the
+BEV map. A cell is kept when at least half of it is on the band.
+
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/object_detection/mask_input_frames.py --clip AV_T_EW_3 --preview-only
 """
 import argparse
@@ -27,7 +32,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/object_detection"))
 from road_mask import ROAD_X, ROAD_Y   # noqa: E402
 
-HEIGHT_M = 2.5                        # tallest vehicle part kept visible (trucks)
+HEIGHT_M = 2.5                        # tallest vehicle part kept visible (input mask, as run)
+FEATURE_HEIGHT_M = 2.5                # feature mask; 4.5 m kept a 4 m truck's roof in the outer lane but let
+                                      # 40 parking-lot boxes through (5 clips) against 2 at 2.5 m
+FEATURE_GRID = (54, 96)               # final_dim (864, 1536) / downsample_factor 16
 MEAN_BGR = (104, 116, 124)            # ImageNet mean, the detector's zero after normalisation
 EXTRINSIC = "metric_extrinsic_h151_dpm031.json"
 
@@ -46,6 +54,12 @@ def input_mask(K, R, t, w=1920, h=1080, height=HEIGHT_M, n=12):
     return keep.reshape(h, w)
 
 
+def feature_mask(K, R, t, grid=FEATURE_GRID, height=FEATURE_HEIGHT_M):
+    """float32 grid (fH, fW): 1 where at least half the cell's pixels are on the band."""
+    m = input_mask(K, R, t, height=height).astype(np.float32)
+    return (cv2.resize(m, grid[::-1], interpolation=cv2.INTER_AREA) >= 0.5).astype(np.float32)
+
+
 def load(clip):
     cal = ROOT / "outputs/calibration/camera-data" / clip
     fx, fy, cx, cy = json.loads(next(cal.glob("*_anycalib_pinhole_pinhole.json")).read_text())["prediction"]["intrinsics"]
@@ -57,9 +71,15 @@ def main():
     ap = argparse.ArgumentParser("Mask detector input to the highway")
     ap.add_argument("--clip", nargs="+", required=True)
     ap.add_argument("--preview-only", action="store_true")
+    ap.add_argument("--feature", action="store_true", help="write feature_mask.npy only")
     a = ap.parse_args()
     for clip in a.clip:
         K, R, t = load(clip)
+        if a.feature:
+            fm = feature_mask(K, R, t)
+            np.save(ROOT / "outputs/calibration/camera-data" / clip / "feature_mask.npy", fm)
+            print(f"{clip}: feature mask keeps {fm.mean():.0%} of {fm.size} cells")
+            continue
         m = input_mask(K, R, t)
         cal = ROOT / "outputs/calibration/camera-data" / clip
         cv2.imwrite(str(cal / "input_mask.png"), m.astype(np.uint8) * 255)
@@ -92,7 +112,13 @@ def _selfcheck():
         assert m[v, u], p
     u, v = px([45.0, -49.0, 0.0])
     assert not m[v, u]
-    print(f"selfcheck ok (road and roof kept, parked car off the band masked; keeps {m.mean():.0%})")
+    fm = feature_mask(K, R, t)
+    assert fm.shape == FEATURE_GRID
+    cell = lambda p: (px(p)[1] * FEATURE_GRID[0] // 1080, px(p)[0] * FEATURE_GRID[1] // 1920)
+    assert fm[cell([60.0, -10.0, 1.5])] == 1, "car on the road dropped"
+    assert fm[cell([45.0, -49.0, 0.0])] == 0, "parked car kept"
+    print(f"selfcheck ok (road and roof kept, parked car off the band masked; keeps {m.mean():.0%}; "
+          f"feature grid keeps {fm.mean():.0%})")
 
 
 if __name__ == "__main__":
