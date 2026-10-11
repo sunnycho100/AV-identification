@@ -175,7 +175,8 @@ def clean(track, fps, times=None, q_vel=None, cov=None):
     full, miss = [], []
     for s, cs in zip(track, c):
         while full and s["frame"] > full[-1]["frame"] + 1:
-            full.append({**full[-1], "frame": full[-1]["frame"] + 1})
+            fill = {k: v for k, v in full[-1].items() if k not in ("x_det", "y_det")}   # a filled gap is not a measurement
+            full.append({**fill, "frame": full[-1]["frame"] + 1})
             miss.append(True)
         full.append(s)
         miss.append(bool(cs))
@@ -306,6 +307,8 @@ def _selfcheck():
         [dict(car[40], x=car[40]["x"] - 1.5, y=1.5)]                    # a 3-frame displaced run goes too
     run3.sort(key=lambda s: s["frame"])
     assert [len(p) for p in remove_jumps(run3, 30)] == [57], [len(p) for p in remove_jumps(run3, 30)]
+    gap_raw = [dict(s, x_det=s["x"], y_det=s["y"]) for s in gap]                 # filled frames carry no measurement
+    assert sum("x_det" in s for s in clean(gap_raw, 30)) == len(gap)
     rs = raw_states(tr["a"], asg["a"], 30)
     assert len(rs) == 10 and rs[3]["x"] == 2.0 and rs[3]["y"] == 0.05 and rs[3]["yaw"] == 0.1
     print(f"selfcheck ok (55 of 60 states kept, early speed {early:.2f} m/s, lateral std {lat:.3f} m, "
