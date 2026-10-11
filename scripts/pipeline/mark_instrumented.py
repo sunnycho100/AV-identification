@@ -67,7 +67,8 @@ def main():
     ap.add_argument("--tag", default="ft102")
     a = ap.parse_args()
     out_dir = ROOT / "outputs/trajectories" / f"{a.clip}_{a.tag}"
-    det_dir = ROOT / "outputs/object_detection/camera-data" / f"{a.clip}_{a.tag}_road"
+    det_tag = json.loads((out_dir / "run.json").read_text())["settings"].get("det_tag") or a.tag
+    det_dir = ROOT / "outputs/object_detection/camera-data" / f"{a.clip}_{det_tag}_road"
     if (ROOT / "outputs/target_id" / a.clip / "marker_matches.json").exists():
         res = by_marker(a.clip, out_dir, det_dir)
     elif a.clip in ch.REFERENCE:

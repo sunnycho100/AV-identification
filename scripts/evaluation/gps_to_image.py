@@ -77,7 +77,8 @@ def load_clip(clip, tag="ft102"):
     vid = json.loads(inst.read_text())["vehicle_id"] if inst.exists() else None
     n = len(list((ROOT / f"data/camera-data/{clip}/frames_all").glob("*.jpg")))
     t, copy = frame_times(clip, n)
-    cal = json.loads((ROOT / "outputs/object_detection/camera-data" / f"{clip}_{tag}" / "calibration_used.json").read_text())
+    det_tag = json.loads((run / "run.json").read_text())["settings"].get("det_tag") or tag
+    cal = json.loads((ROOT / "outputs/object_detection/camera-data" / f"{clip}_{det_tag}" / "calibration_used.json").read_text())
     car = None
     if vid is not None:
         st = [s for s in tracks[vid] if not copy[s["frame"]]]

@@ -68,6 +68,94 @@ def split_jumps(track, fps, times=None, cov=None):
     return parts
 
 
+SNAP_M = 2.0                    # a tracker state takes the detection within this distance
+OUTLIER_WIN_S, OUTLIER_K, OUTLIER_FLOOR_M = 0.5, 4.0, 0.1
+
+
+def assign_detections(tracks, dets, times=None):
+    """One-to-one: each frame's detections go to the tracks' detected states there
+    (Hungarian on distance, pairs over SNAP_M refused), so two tracks never share a
+    box. Returns {track_id: {frame: box}}."""
+    from scipy.optimize import linear_sum_assignment
+    by_frame = {}
+    for k, t in tracks.items():
+        for s, c in zip(t, coasted(t)):
+            if not c and not (times and times.get(s["frame"], (0, False))[1]):
+                by_frame.setdefault(s["frame"], []).append((k, s))
+    out = {k: {} for k in tracks}
+    for f, sts in by_frame.items():
+        boxes = dets.get(f) or []
+        if not boxes:
+            continue
+        d = np.array([[np.hypot(b["x"] - s["x"], b["y"] - s["y"]) for b in boxes] for _, s in sts])
+        for i, j in zip(*linear_sum_assignment(d)):
+            if d[i, j] <= SNAP_M:
+                out[sts[i][0]][f] = boxes[j]
+    return out
+
+
+def raw_states(track, boxes, fps, times=None):
+    """Detected states only, each moved onto its own detection (x, y, yaw), so no
+    filter output is left in the positions. boxes: frame -> this track's box
+    (assign_detections); states without one are dropped."""
+    out = []
+    for s in track:
+        d = boxes.get(s["frame"])
+        if d is None:
+            continue
+        out.append({**s, "x": d["x"], "y": d["y"], "yaw": d["yaw"], "x_det": d["x"], "y_det": d["y"],
+                    "t_s": round(times[s["frame"]][0] if times and s["frame"] in times else s["frame"] / fps, 4)})
+    return out
+
+
+def drop_spikes(p):
+    """Detections more than OUTLIER_K robust sigmas (floor OUTLIER_FLOOR_M) off a
+    straight line through their neighbours within +-OUTLIER_WIN_S, with at least two
+    neighbours on each side (so a track end or a lasting shift is not a spike)."""
+    t = np.array([s["t_s"] for s in p])
+    xy = np.array([[s["x"], s["y"]] for s in p])
+    keep = np.ones(len(p), bool)
+    for i in range(len(p)):
+        nb = np.flatnonzero((np.abs(t - t[i]) <= OUTLIER_WIN_S) & (np.arange(len(p)) != i))
+        if (t[nb] < t[i]).sum() < 2 or (t[nb] > t[i]).sum() < 2:
+            continue
+        A = np.c_[t[nb] - t[i], np.ones(len(nb))]
+        coef, *_ = np.linalg.lstsq(A, xy[nb], rcond=None)
+        res_nb = np.hypot(*(xy[nb] - A @ coef).T)
+        w = res_nb <= np.median(res_nb)               # trimmed start: neighbours that jumped do not steer the line
+        for _ in range(2):
+            coef, *_ = np.linalg.lstsq(A[w], xy[nb][w], rcond=None)
+            res_nb = np.hypot(*(xy[nb] - A @ coef).T)
+            scale = max(1.4826 * np.median(res_nb[w]), OUTLIER_FLOOR_M)
+            w = res_nb <= OUTLIER_K * scale
+        if np.hypot(*(xy[i] - coef[1])) > OUTLIER_K * scale:
+            keep[i] = False
+    return [s for s, k in zip(p, keep) if k]
+
+
+def remove_jumps(states, fps, times=None, cov=None):
+    """Hang's "only smooth the strange results", on detected states only:
+    1. drop single detections that jump off their neighbours on both sides (drop_spikes);
+    2. then cut where two consecutive remaining DETECTIONS are further apart than
+       V_MAX allows over their real time gap (split_jumps): a lasting jump, i.e.
+       two cars joined. A coasted or held state can no longer trigger it.
+    Normal jitter stays. Returns the pieces (lists of states)."""
+    kept = drop_spikes(states) if len(states) > 4 else list(states)
+    return [p for p in split_jumps(kept, fps, times, cov) if p] if kept else []
+
+
+def finite_velocity(states):
+    """No smoothing: velocity by central difference of positions over real time
+    (one-sided at the ends). This is the raw speed that jumps frame to frame."""
+    out = [dict(s) for s in states]
+    for i, s in enumerate(out):
+        a, b = out[max(i - 1, 0)], out[min(i + 1, len(out) - 1)]
+        dt = b["t_s"] - a["t_s"]
+        vx, vy = ((b["x"] - a["x"]) / dt, (b["y"] - a["y"]) / dt) if dt > 0 else (0.0, 0.0)
+        s["vx"], s["vy"], s["speed_mps"] = float(vx), float(vy), float(np.hypot(vx, vy))
+    return out
+
+
 def clean(track, fps, times=None, q_vel=None, cov=None):
     """One track (list of states) to its trimmed, smoothed copy. None if nothing is left.
 
@@ -194,6 +282,32 @@ def _selfcheck():
     spf = np.array([s["speed_mps"] for s in clean(far, 30, cov=cov)])
     spn = np.array([s["speed_mps"] for s in clean(far, 30)])
     assert spf.max() < 32 and abs(np.median(spf) - 25) < 2, (spf.max(), np.median(spf))
+    # jump removal: one 1.5 m spike in a car with 0.1 m jitter goes, the jitter stays;
+    # a car held still by the tracker for 4 frames no longer cuts the track
+    car = [{"frame": f, "x": 20 * f / 30 + 0.1 * np.sin(2.3 * f) + (1.5 if f == 40 else 0), "y": 0.0,
+            "t_s": f / 30, "score": 0.6 + f * 1e-3, "vx": 1.0} for f in range(60)]
+    held = [s for s in car if not 20 <= s["frame"] < 24]
+    pj = remove_jumps(held, 30)
+    assert len(pj) == 1 and len(pj[0]) == len(held) - 1 and all(s["frame"] != 40 for s in pj[0]), [len(p) for p in pj]
+    two = remove_jumps([dict(s, x=s["x"] + (15 if s["frame"] >= 30 else 0)) for s in car], 30)
+    assert [len(p) for p in two] == [30, 29], [[s["frame"] for s in p] for p in two]
+    fv = finite_velocity(pj[0])
+    assert abs(np.median([s["speed_mps"] for s in fv]) - 20) < 1.0
+    big = [dict(s, x=s["x"] + (40 if s["frame"] == 40 else 0)) for s in car]          # huge single spike: removed, not split
+    assert [len(p) for p in remove_jumps(big, 30)] == [59]
+    # two tracks side by side, both nearest to the same box in frame 5: only one gets it
+    dets = {f: [{"x": 20 * f / 30, "y": 0.05, "yaw": 0.1}] + ([{"x": 20 * f / 30, "y": 3.0, "yaw": 0.0}] if f != 5 else [])
+            for f in range(10)}
+    tr = {k: [{"frame": f, "x": 20 * f / 30, "y": y, "score": 0.5 + f * 1e-3, "vx": float(f)} for f in range(10)]
+          for k, y in (("a", 0.0), ("b", 1.2))}
+    asg = assign_detections(tr, dets)
+    assert asg["a"][5]["y"] == 0.05 and 5 not in asg["b"] and asg["b"][3]["y"] == 3.0, asg["b"].get(3)
+    run3 = [dict(s, y=1.5 if 40 <= s["frame"] < 43 else 0.0) for s in car if s["frame"] != 40] + \
+        [dict(car[40], x=car[40]["x"] - 1.5, y=1.5)]                    # a 3-frame displaced run goes too
+    run3.sort(key=lambda s: s["frame"])
+    assert [len(p) for p in remove_jumps(run3, 30)] == [57], [len(p) for p in remove_jumps(run3, 30)]
+    rs = raw_states(tr["a"], asg["a"], 30)
+    assert len(rs) == 10 and rs[3]["x"] == 2.0 and rs[3]["y"] == 0.05 and rs[3]["yaw"] == 0.1
     print(f"selfcheck ok (55 of 60 states kept, early speed {early:.2f} m/s, lateral std {lat:.3f} m, "
           f"8-frame gap filled, speed {sp.min():.1f}-{sp.max():.1f}; 31 fps clip with a freeze: "
           f"{np.median(sp3):.2f} m/s, frame/30 would read {np.median(sp3) * 30 / 31:.2f}; joined cars split "

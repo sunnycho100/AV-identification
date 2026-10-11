@@ -54,6 +54,10 @@ DEFAULTS = {
     "score_thresh": 0.45, "track_low_thresh": 0.45, "max_age": 6, "fps": 30, "q_vel": 0.1,
     "px_noise": 1.0,          # pixels of ground-point noise, turned into metres by range (0 = off)
     "max_m_per_px": 1.0,      # drop detections where one pixel covers more road than this (near the horizon)
+    # ablation switches (defaults = the pipeline as before). Any other value works on
+    # the raw detections (postprocess_tracks.raw_states) instead of tracker output:
+    "jumps": "split",         # split: cut at jumps (old) | remove: jumps only, between detections | none
+    "smooth": "rts",          # rts: RTS smoother at q_vel | none: raw positions, central-difference speed
 }
 LANE_BIN_M, MIN_LANE_SEP_M, MOVING_MPS = 0.25, 2.5, 3.0
 MIN_LANE_STATES, MAX_LANE_OFFSET_M = 30, 2.0   # a quiet lane still counts; off every lane = no lane
@@ -219,15 +223,29 @@ def main():
     tracks, joined = st.stitch(d["tracks"], a.fps)
     print("5. split impossible jumps, smooth")
     cov = pp.footprint_cov(cam, f_px, a.px_noise) if a.px_noise > 0 else None
+    raw = a.jumps != "split" or a.smooth != "rts"
+    if raw:
+        road_dir = det.with_name(det.name + "_road")
+        dets = {int(p.stem[:3]): json.loads(p.read_text()) for p in road_dir.glob("*_pred.json")}
+        boxes = pp.assign_detections(tracks, dets, times)
     nid = max(int(k) for k in tracks) + 1
     pieces = {}
     for k, v in tracks.items():
-        parts = pp.split_jumps(v, a.fps, times, cov)
+        if not raw:
+            parts = pp.split_jumps(v, a.fps, times, cov)
+        else:
+            rs = pp.raw_states(v, boxes[k], a.fps, times)
+            parts = pp.remove_jumps(rs, a.fps, times, cov) if a.jumps == "remove" else [rs]
+        if not parts or not parts[0]:
+            continue
         pieces[k] = parts[0]
         for part in parts[1:]:
             pieces[str(nid)], nid = part, nid + 1
     n_split = len(pieces) - len(tracks)
-    tracks = {k: pp.clean(v, a.fps, times, a.q_vel, cov) for k, v in pieces.items()}
+    if a.smooth == "rts":
+        tracks = {k: pp.clean(v, a.fps, times, a.q_vel, cov) for k, v in pieces.items()}
+    else:
+        tracks = {k: pp.finite_velocity(v) for k, v in pieces.items()}
     tracks = {k: v for k, v in tracks.items() if len(v) >= 3}
     n_before = len(tracks)
     tracks = drop_duplicates(tracks)
