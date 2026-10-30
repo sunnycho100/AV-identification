@@ -80,7 +80,7 @@ def test_low_score_alone_never_starts_a_track():
     tracks = run(lambda f: car(f, LOW), low_thresh=0.20)
     assert tracks == {}, f"a low-score detection started {len(tracks)} track(s)"
 
-    # the default path still tracks it: the refusal is the flag, not the data
+    # the one-stage baseline still tracks it: the refusal is the second pass
     assert len(run(lambda f: car(f, LOW), low_thresh=None)) == 1, "baseline lost the car"
     print("ok: a lone low-score detection never births a track")
 
