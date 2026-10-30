@@ -60,6 +60,8 @@ LABELS = "pseudo_labels"          # label set under outputs/finetune/, set by --
 EXTRINSIC = "metric_extrinsic_site.json"   # the frame the labels are in, set by --extrinsic
 FRAMES = "data/camera-data/{clip}/frames_all"
 FEAT_MASK = False
+AUGMENT = False                   # --augment: standard self-training baseline (flip + resize-crop + BEV flip)
+AUG_RESIZE = (0.9, 1.1)
 GPS_HALF_WIN_M = (6.0, 3.0)       # along, across HALF-extents: a 12 m x 6 m loss window round the GPS car
 CAR_HALF_M = (3.0, 1.5)           # half-extents of a known other car's cells, kept out of the GPS window
 GPS_CODE = [0, 0, 1, 0, 0, 0, 1, 1, 0.5, 0.5]   # dx dy z | w l h | sin cos | vx vy (vel as in code_weights)
@@ -89,7 +91,55 @@ def load_sample(clip, frame, K, l2c, roles=False):
     # the box centre and get_bboxes subtracts h/2 on decode, so add it back here.
     boxes = to_boxes(objs)
     labels = torch.full((len(objs),), CAR_CLASS_INDEX, dtype=torch.long)
+    if AUGMENT:
+        img, mats, boxes = augment(img, mats, boxes)
     return img, mats, boxes, labels
+
+
+def warp(t, A, mode, stride):
+    """Resample t (N, C, h, w), a grid at `stride` image pixels, under pixel map A (3x3, old -> new).
+    Output keeps the same grid size; cells mapped from outside the input become 0."""
+    import torch.nn.functional as F
+    h, w = t.shape[-2:]
+    ys, xs = torch.meshgrid(torch.arange(h) + 0.5, torch.arange(w) + 0.5)  # ij order (old torch has no indexing=)
+    p = torch.stack([xs * stride, ys * stride, torch.ones_like(xs)], -1) @ torch.inverse(A).T
+    g = torch.stack([p[..., 0] / (w * stride), p[..., 1] / (h * stride)], -1) * 2 - 1
+    return F.grid_sample(t, g[None].expand(t.shape[0], -1, -1, -1).float(), mode=mode,
+                         padding_mode="zeros", align_corners=False)
+
+
+def augment(img, mats, boxes, flip=None, scale=None, bev_flip=None):
+    """Image aug (resize-crop + horizontal flip) and BEV aug (mirror y), as in BEVDepth.
+
+    Image aug is folded into ida_mats, which get_geometry undoes, so the frustum
+    still lands on the same ground points and the 3D labels do not change. The
+    feature mask lives on the image grid and gets the same pixel map.
+    BEV flip mirrors the lateral axis through bda_mat (y -> -y); labels follow
+    (y, yaw, vy negated). The BEV grid is symmetric in y, so nothing leaves it.
+    """
+    H, W = img.shape[-2:]
+    flip = random.random() < 0.5 if flip is None else flip
+    scale = random.uniform(*AUG_RESIZE) if scale is None else scale
+    bev_flip = random.random() < 0.5 if bev_flip is None else bev_flip
+    # resize about a random point then crop back to (H, W): x' = s*x + t
+    tx = random.uniform(min(0, W - scale * W), max(0, W - scale * W))
+    ty = random.uniform(min(0, H - scale * H), max(0, H - scale * H))
+    A = torch.tensor([[scale, 0, tx], [0, scale, ty], [0, 0, 1.0]])
+    if flip:
+        A = torch.tensor([[-1.0, 0, W], [0, 1, 0], [0, 0, 1]]) @ A
+    img = warp(img.reshape(-1, 3, H, W), A, "bilinear", 1).reshape(img.shape)
+    mats = dict(mats)
+    A4 = torch.eye(4); A4[:2, :2] = A[:2, :2]; A4[:2, 3] = A[:2, 2]
+    mats["ida_mats"] = A4 @ mats["ida_mats"]
+    if "feat_mask" in mats:
+        fm = mats["feat_mask"]
+        mats["feat_mask"] = warp(fm.reshape(-1, 1, *fm.shape[-2:]), A, "nearest",
+                                 H // fm.shape[-2]).reshape(fm.shape)
+    if bev_flip:
+        mats["bda_mat"] = torch.diag(torch.tensor([1.0, -1, 1, 1])) @ mats["bda_mat"]
+        boxes = boxes.clone()
+        boxes[:, [1, 6, 8]] *= -1
+    return img, mats, boxes
 
 
 def to_boxes(objs):
@@ -247,7 +297,7 @@ def _selfcheck():
 
 
 def main():
-    global LABELS, EXTRINSIC, FRAMES, FEAT_MASK
+    global LABELS, EXTRINSIC, FRAMES, FEAT_MASK, AUGMENT
     ap = argparse.ArgumentParser("Fine-tune the BEVHeight head on pseudo-labels")
     ap.add_argument("--epochs", type=int, default=6)
     ap.add_argument("--lr", type=float, default=2e-5)
@@ -267,6 +317,8 @@ def main():
                          "metric_extrinsic_h151_dpm031.json, the frame the GPS labels were built in")
     ap.add_argument("--frames-root", default=FRAMES, help="frame folder, {clip} is filled in")
     ap.add_argument("--feat-mask", action="store_true")
+    ap.add_argument("--augment", action="store_true",
+                    help="random flip + resize-crop of the image and random BEV flip (pseudo mode only)")
     ap.add_argument("--train-clips", nargs="+", default=None,
                     help=f"default {TRAIN_CLIPS}, or in GPS modes HV_T_EW_1 AV_T_WE_1 AV_T_WE_3")
     ap.add_argument("--no-val", action="store_true")
@@ -280,6 +332,8 @@ def main():
         if args.labels != "gps_labels" or set(args.train_clips) & set(HELD_OUT):
             raise ValueError("GPS modes train on gps_labels and never on the test clip")
     LABELS, EXTRINSIC, FRAMES, FEAT_MASK = args.labels, args.extrinsic, args.frames_root, args.feat_mask
+    if args.augment and gps:
+        raise ValueError("--augment is only wired into the pseudo-label path")
 
     torch.manual_seed(0); random.seed(0); np.random.seed(0)
     dev = args.device
@@ -295,7 +349,7 @@ def main():
     val = [] if args.no_val else [(c, f) for c in HELD_OUT
            for f in (frames_for(c)[:args.limit] if args.limit else frames_for(c))[::5]]
     print(f"mode {args.mode}, labels {LABELS}, extrinsic {EXTRINSIC}, frames {FRAMES}, "
-          f"feature mask {FEAT_MASK}; train {len(samples)} frames from {train_clips}; "
+          f"feature mask {FEAT_MASK}, augment {args.augment}; train {len(samples)} frames from {train_clips}; "
           f"val {len(val)} frames from {[] if args.no_val else HELD_OUT}")
 
     opt = torch.optim.AdamW(trainable, lr=args.lr, weight_decay=1e-4)
@@ -322,6 +376,7 @@ def main():
     print(f"epoch 0 (before training): held-out loss {v0}")
     history.append({"epoch": 0, "train_loss": None, "val_loss": v0})
 
+    AUGMENT = args.augment
     for ep in range(1, args.epochs + 1):
         random.shuffle(samples)
         model.eval(); freeze_image_branch(model)
@@ -348,7 +403,9 @@ def main():
                 print(f"   ep{ep} {i+1}/{len(samples)} loss {run/max(n,1):.4f} "
                       f"({(time.time()-t0)/(i+1):.2f}s/step)")
         tr = run / max(n, 1)
+        AUGMENT = False
         vl = evaluate()
+        AUGMENT = args.augment
         history.append({"epoch": ep, "train_loss": tr, "val_loss": vl})
         print(f"epoch {ep}: train {tr:.4f} | held-out {vl} "
               f"({(time.time()-t0)/60:.1f} min)")

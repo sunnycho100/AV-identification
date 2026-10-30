@@ -170,6 +170,8 @@ def main():
     for k, v in DEFAULTS.items():
         ap.add_argument(f"--{k.replace('_', '-')}", type=type(v), default=v)
     ap.add_argument("--detect-only", action="store_true")
+    ap.add_argument("--no-road-filter", action="store_true",
+                    help="evaluation only: track every detection, no off-road drop and no range cut")
     a = ap.parse_args()
     cfg = {k: getattr(a, k) for k in DEFAULTS}
     run_name = f"{a.clip}_{a.tag}"
@@ -187,13 +189,19 @@ def main():
         print("1. detect: found existing detections")
     if a.detect_only:
         return
-    print("2. road mask")
-    run([PY, "scripts/object_detection/road_mask.py", "--clip", a.clip, "--run", a.det_tag or a.tag])
+    road_dir = det.with_name(det.name + ("_noroad" if a.no_road_filter else "_road"))
+    if a.no_road_filter:
+        print("2. road mask: skipped (--no-road-filter)")
+        road_dir.mkdir(exist_ok=True)
+        for p in det.glob("*_pred.json"):
+            (road_dir / p.name).write_text(p.read_text())
+    else:
+        print("2. road mask")
+        run([PY, "scripts/object_detection/road_mask.py", "--clip", a.clip, "--run", a.det_tag or a.tag])
     times = ft.load(a.clip)
     if times is None:
         print("   no frame_times.json: using frame / fps (run frame_times.py first)")
     else:                                                  # a frozen copy carries no new detection
-        road_dir = det.with_name(det.name + "_road")
         for f, (_, copy) in times.items():
             p = road_dir / f"{f:03d}_pred.json"
             if copy and p.exists():
@@ -207,7 +215,7 @@ def main():
     # pitch error stretches distances, so speeds there are not measurable: drop them.
     r_max = float(np.sqrt(max(a.max_m_per_px * f_px * cam[2] - cam[2] ** 2, 0.0)))
     n_far = 0
-    for p in det.with_name(det.name + "_road").glob("*_pred.json"):
+    for p in ([] if a.no_road_filter else road_dir.glob("*_pred.json")):
         boxes = json.loads(p.read_text())
         keep = [b for b in boxes if np.hypot(b["x"] - cam[0], b["y"] - cam[1]) <= r_max]
         if len(keep) < len(boxes):
@@ -216,7 +224,7 @@ def main():
     print(f"   usable range {r_max:.0f} m ({a.max_m_per_px} m per pixel): dropped {n_far} farther boxes")
     print("3. track")
     trk = ROOT / "outputs/tracking/camera-data" / f"{run_name}_road"
-    run([PY, "scripts/tracking/run_ab3dmot.py", "--det-dir", det.with_name(det.name + "_road"),
+    run([PY, "scripts/tracking/run_ab3dmot.py", "--det-dir", road_dir,
          "--out-dir", trk, "--low-thresh", a.track_low_thresh, "--max-age", a.max_age, "--fps", a.fps])
     d = json.loads((trk / "tracks.json").read_text())
     print("4. stitch")
@@ -225,7 +233,6 @@ def main():
     cov = pp.footprint_cov(cam, f_px, a.px_noise) if a.px_noise > 0 else None
     raw = a.jumps != "split" or a.smooth != "rts"
     if raw:
-        road_dir = det.with_name(det.name + "_road")
         dets = {int(p.stem[:3]): json.loads(p.read_text()) for p in road_dir.glob("*_pred.json")}
         boxes = pp.assign_detections(tracks, dets, times)
     nid = max(int(k) for k in tracks) + 1

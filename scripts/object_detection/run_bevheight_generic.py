@@ -5,13 +5,22 @@ and a generic extrinsic JSON ({"rotation": 3x3, "translation": [3]},
 ground-frame -> camera). Reuses the model/config/render code from
 run_bevheight_single.py.
 
-The pipeline default is the 140.8 m DAIR checkpoint at score >= 0.45. Its BEV
+The pipeline default is the 140.8 m DAIR checkpoint at score >= 0.20. Its BEV
 grid reaches the far end of this footage, where the 102.4 m one runs out of
 range and starts placing boxes on empty pavement; at the same threshold it
 finds about a third more cars per frame (7.0 against 5.1 on the five Todd Drive
 clips) and a sixth as many pedestrian and bicycle false positives on the
 freeway. --ckpt and --config together still reach the 102.4 m checkpoint
 (bev_height_lss_r50_864_1536_128x128_102.py) and Rope3D.
+
+Two thresholds, and they belong to different stages. 0.20 is the export
+threshold here: at 0.45, upstream's number, 38 percent of track states have no
+detection within 1.0 m, and about 70 percent of those gaps do have one at 0.20,
+so exporting down to 0.20 is what makes those detections exist at all. They are
+not trustworthy enough to start a track on, which is the other number's job:
+run_ab3dmot.py keeps 0.45 as the birth gate and lets anything in [0.20, 0.45)
+only continue a track that already exists. Passing --score-thresh 0.45 here
+reproduces the earlier runs exactly.
 
 Smoke test (Camera data clip AV_T_WE_1, mock extrinsic):
     .venv/bin/python scripts/object_detection/run_bevheight_generic.py \
@@ -41,6 +50,11 @@ from scripts.adapter.calib_to_bevheight_input import (
 from scripts.data_converter.visual_utils import draw_box_3d, project_to_image
 from scripts.object_detection.run_bevheight_single import (
     SCORE_THRESH, filter_and_pack, load_checkpoint)
+
+# The export threshold. Lower than upstream's SCORE_THRESH on purpose: the
+# tracker's second association pass consumes the [0.20, 0.45) band, and those
+# detections have to be in the files for it to see them.
+DEFAULT_SCORE_THRESH = 0.20
 
 DEFAULT_CKPT = ROOT / "checkpoints/BEVHeight_R50_128_140.8_75.22_49_epochs.ckpt"
 DEFAULT_CONFIG = ROOT / "experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_140.py"
@@ -93,7 +107,7 @@ if DEVICE == "cuda":
     torch.inverse = _cpu_inverse
 
 
-def run_frame(model, image_path, K, lidar2cam, exp, score_thresh=SCORE_THRESH, feat_mask=None):
+def run_frame(model, image_path, K, lidar2cam, exp, score_thresh=DEFAULT_SCORE_THRESH, feat_mask=None):
     img_tensor, mats_dict, img_meta = build_mats_dict(
         str(image_path), K, lidar2cam, exp.final_dim, exp.img_conf)
     if feat_mask is not None:          # (fH, fW) grid, see mask_input_frames.py --feature
@@ -149,9 +163,11 @@ def main():
                     help="experiment config whose model definition matches --ckpt "
                          "(e.g. experiments/dair-v2x/bev_height_lss_r50_864_1536_128x128_102.py "
                          "for the 102.4 m checkpoint)")
-    ap.add_argument("--score-thresh", type=float, default=SCORE_THRESH,
-                    help=f"keep detections scoring at least this (default {SCORE_THRESH}, "
-                         "upstream's export threshold)")
+    ap.add_argument("--score-thresh", type=float, default=DEFAULT_SCORE_THRESH,
+                    help=f"keep detections scoring at least this (default "
+                         f"{DEFAULT_SCORE_THRESH}, the band the tracker's second "
+                         f"association pass needs; {SCORE_THRESH} is upstream's "
+                         "export threshold and reproduces the earlier runs)")
     ap.add_argument("--limit", type=int, default=None, help="max frames to process")
     ap.add_argument("--feat-mask", default=None,
                     help="feature_mask.npy: drop off-road feature cells before the BEV projection")

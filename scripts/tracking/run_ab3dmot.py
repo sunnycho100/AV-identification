@@ -7,6 +7,16 @@ Kalman-filter velocity as the v0 motion feature.
 Bypasses AB3DMOT's main.py / utils.py / io.py (wired to KITTI/nuScenes layouts). Uses only
 the tracker core (model.AB3DMOT). Ego-motion compensation is OFF: fixed roadside camera.
 
+Two thresholds, one per stage. HIGH_SCORE (0.45) gates track BIRTH: only a
+detection the detector is confident about may create a new identity, which is
+upstream's export threshold and the number the earlier runs used for
+everything. --low-thresh (0.20) gates track CONTINUATION: it is the detector's
+new export floor (run_bevheight_generic.py), and detections in [0.20, 0.45) are
+offered, in a second association pass, only to tracks the first pass left
+unmatched. So a weak detection can hold an existing identity alive across a
+gap but can never invent one. Running on detections exported at 0.45 leaves
+that band empty and reproduces the earlier behaviour; so does --low-thresh 0.45.
+
 Env: miniforge 3.12 (numpy/scipy/numba present; filterpy pip-installed).
 Run: /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/tracking/run_ab3dmot.py
 """
@@ -35,8 +45,9 @@ from AB3DMOT_libs.model import AB3DMOT  # noqa: E402
 TAG = "our_intrinsics"
 DEFAULT_FPS = 12.0  # DAIR-V2X-I 12 Hz; new datasets pass --fps (Camera data clips are 30)
 TRACK_CLASS = "car"   # v0: vehicles only (the AV-vs-human question)
-HIGH_SCORE = 0.45     # the detector's export threshold: anything at least this is a
-                      # normal detection, below it is a ByteTrack-style leftover
+HIGH_SCORE = 0.45     # birth gate: anything at least this is a normal detection,
+                      # below it is a ByteTrack-style leftover (see the docstring)
+DEFAULT_LOW_THRESH = 0.20  # the detector's export floor: the whole weak band
 DET_DIR = ROOT / "outputs/object_detection" / TAG
 OUT_DIR = ROOT / "outputs/tracking" / TAG
 
@@ -163,10 +174,12 @@ def main():
                     help="detections dir (default: outputs/object_detection/<TAG>)")
     ap.add_argument("--out-dir", default=None,
                     help="output dir (default: outputs/tracking/<TAG>)")
-    ap.add_argument("--low-thresh", type=float, default=None,
-                    help=f"turn on two-stage association: detections scoring "
+    ap.add_argument("--low-thresh", type=float, default=DEFAULT_LOW_THRESH,
+                    help=f"two-stage association: detections scoring "
                          f"[this, {HIGH_SCORE}) may continue an existing track but "
-                         "never start one (default off)")
+                         f"never start one (default {DEFAULT_LOW_THRESH}; pass "
+                         f"{HIGH_SCORE} for an empty band, i.e. the old one-stage "
+                         "behaviour)")
     ap.add_argument("--max-age", type=int, default=None,
                     help="frames a track survives without a match (preset 2 was "
                          "tuned for 10 Hz; try ~6 at 30 Hz)")
@@ -194,10 +207,7 @@ def main():
     print(f"Tracking '{TRACK_CLASS}' over {len(frame_ids)} frames "
           f"({frame_ids[0]:06d}..{frame_ids[-1]:06d}) from {DET_DIR}")
 
-    if args.low_thresh is None:
-        tracker = AB3DMOT(build_cfg(), cat="Car", ID_init=0)
-    else:
-        tracker = ByteAB3DMOT(build_cfg(), cat="Car", low_thresh=args.low_thresh, ID_init=0)
+    tracker = ByteAB3DMOT(build_cfg(), cat="Car", low_thresh=args.low_thresh, ID_init=0)
     if args.max_age is not None:
         tracker.max_age = args.max_age
 
