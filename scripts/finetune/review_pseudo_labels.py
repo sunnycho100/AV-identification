@@ -59,10 +59,11 @@ def main():
     ap.add_argument("--clip", required=True)
     ap.add_argument("--stills", type=int, default=6)
     ap.add_argument("--labels", default="pseudo_labels", help="label set under outputs/finetune/, e.g. pseudo_labels_v2")
+    ap.add_argument("--run", default="phase1", help="detection run whose calibration the labels are in")
     args = ap.parse_args()
     clip = args.clip
 
-    det_dir = ROOT / f"outputs/object_detection/camera-data/{clip}_phase1"
+    det_dir = ROOT / f"outputs/object_detection/camera-data/{clip}_{args.run}"
     lab_dir = ROOT / f"outputs/finetune/{args.labels}/{clip}"
     cal = json.loads((det_dir / "calibration_used.json").read_text())
     K = np.array(cal["K"]); l2c = np.array(cal["lidar2cam"])

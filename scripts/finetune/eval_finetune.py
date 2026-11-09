@@ -33,7 +33,7 @@ def yaw_off(y):
 def run(model, clip, frames, K, l2c):
     offs, per_frame = [], []
     for f in frames:
-        img, mats, _, _ = load_sample(clip, f, K, l2c)
+        img, mats, *_ = load_sample(clip, f, K, l2c)
         i2, m2 = to_device(img, mats, "cpu")
         with torch.no_grad():
             r = model.get_bboxes(model(i2, m2), [{"box_type_3d": LiDARInstance3DBoxes}])

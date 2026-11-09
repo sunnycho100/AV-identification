@@ -89,11 +89,14 @@ def load_sample(clip, frame, K, l2c, roles=False):
     # column order must match the model's own output space, see _selfcheck.
     # Labels store the box bottom (what get_bboxes outputs), but the head regresses
     # the box centre and get_bboxes subtracts h/2 on decode, so add it back here.
-    boxes = to_boxes(objs)
-    labels = torch.full((len(objs),), CAR_CLASS_INDEX, dtype=torch.long)
+    # role "ignore" (D34): no loss near the box, neither car nor background. Sets
+    # without roles are all labels, so earlier label sets train exactly as before.
+    lab = [o for o in objs if o.get("role", "label") == "label"]
+    boxes = to_boxes(lab + [o for o in objs if o.get("role") == "ignore"])
+    labels = torch.full((len(lab),), CAR_CLASS_INDEX, dtype=torch.long)
     if AUGMENT:
-        img, mats, boxes = augment(img, mats, boxes)
-    return img, mats, boxes, labels
+        img, mats, boxes = augment(img, mats, boxes)      # ignore boxes get the same BEV flip
+    return img, mats, boxes[:len(lab)], labels, boxes[len(lab):]
 
 
 def warp(t, A, mode, stride):
@@ -239,6 +242,52 @@ def car_only_loss(model, targets, preds):
     return model.loss(sliced, [preds[CAR_TASK]])
 
 
+def car_loss(model, targets, preds, ignore):
+    """car_only_loss with no heatmap loss within CAR_HALF_M of an ignore box (D34).
+
+    The ignored margin of ST3D (CVPR 2021, Eq. 4) and KITTI's DontCare: a box we
+    cannot vouch for is neither taught as a car nor as background. A labelled car's
+    own Gaussian always counts. Regression is unchanged (ignore boxes have none).
+    Written out as BEVHeightHead.loss is, with a heatmap weight; with no ignore
+    boxes it equals car_only_loss (checked by _selfcheck_ignore on the GPU).
+    """
+    from mmdet3d.models.utils import clip_sigmoid
+    head = model.head
+    heatmaps, anno_boxes, inds, masks = targets
+    hm, p = heatmaps[CAR_TASK], preds[CAR_TASK][0]
+    weight = torch.ones_like(hm)
+    if len(ignore):
+        weight[cell_window(head, ignore, CAR_HALF_M)[None, None].expand_as(hm)] = 0
+        weight[hm > 0] = 1.0
+    num_pos = max(float(hm.eq(1).float().sum()), 1.0)
+    loss = head.loss_cls(clip_sigmoid(p["heatmap"]), hm, weight=weight, avg_factor=num_pos)
+    target = anno_boxes[CAR_TASK]
+    anno = torch.cat((p["reg"], p["height"], p["dim"], p["rot"], p["vel"]), dim=1)
+    pred = head._gather_feat(anno.permute(0, 2, 3, 1).reshape(anno.size(0), -1, anno.size(1)), inds[CAR_TASK])
+    mask = masks[CAR_TASK].unsqueeze(2).expand_as(target).float() * (~torch.isnan(target)).float()
+    num = max(float(masks[CAR_TASK].float().sum()), 1e-4)
+    return loss + head.loss_bbox(pred, target, mask * mask.new_tensor(head.train_cfg["code_weights"]), avg_factor=num)
+
+
+def _selfcheck_ignore(clip, frame):
+    """car_loss equals car_only_loss with no ignore boxes, and is no larger with them."""
+    dev = "cuda"
+    model = build_model(); load_checkpoint(model, CKPT_PATH); model.to(dev).eval()
+    K, l2c = clip_paths(clip)
+    img, mats, boxes, labels, ignore = load_sample(clip, frame, K, l2c)
+    img, mats = to_device(img, mats, dev)
+    t = model.get_targets([boxes.to(dev)], [labels.to(dev)])
+    with torch.no_grad():                       # each loss gets fresh preds: the head sigmoids them in place
+        ref = float(car_only_loss(model, t, model(img, mats)))
+        same = float(car_loss(model, t, model(img, mats), ignore[:0].to(dev)))
+        ign = float(car_loss(model, t, model(img, mats), ignore.to(dev)))
+    print(f"selfcheck_ignore {clip} {frame}: {len(boxes)} labels, {len(ignore)} ignore | "
+          f"car_only {ref:.6f}, car_loss no ignore {same:.6f}, with ignore {ign:.6f}")
+    assert abs(ref - same) <= 1e-5 * max(ref, 1.0), "car_loss does not reproduce the head loss"
+    assert ign <= same + 1e-6, "ignoring cells raised the loss"
+    print("selfcheck_ignore ok")
+
+
 def to_device(img, mats, dev):
     return img.to(dev), {k: (v.to(dev) if torch.is_tensor(v) else v)
                          for k, v in mats.items()}
@@ -322,6 +371,8 @@ def main():
     ap.add_argument("--train-clips", nargs="+", default=None,
                     help=f"default {TRAIN_CLIPS}, or in GPS modes HV_T_EW_1 AV_T_WE_1 AV_T_WE_3")
     ap.add_argument("--no-val", action="store_true")
+    ap.add_argument("--selfcheck-ignore", nargs=2, metavar=("CLIP", "FRAME"),
+                    help="check car_loss against the head loss on one frame of --labels, then exit (CUDA)")
     args = ap.parse_args()
     gps = args.mode != "pseudo"
     args.labels = args.labels or ("gps_labels" if gps else "pseudo_labels")
@@ -334,6 +385,8 @@ def main():
     LABELS, EXTRINSIC, FRAMES, FEAT_MASK = args.labels, args.extrinsic, args.frames_root, args.feat_mask
     if args.augment and gps:
         raise ValueError("--augment is only wired into the pseudo-label path")
+    if args.selfcheck_ignore:
+        return _selfcheck_ignore(args.selfcheck_ignore[0], int(args.selfcheck_ignore[1]))
 
     torch.manual_seed(0); random.seed(0); np.random.seed(0)
     dev = args.device
@@ -364,12 +417,12 @@ def main():
         with torch.no_grad():
             for c, f in val:
                 K, l2c = cal[c]
-                img, mats, boxes, labels = load_sample(c, f, K, l2c)
+                img, mats, boxes, labels, ignore = load_sample(c, f, K, l2c)
                 if len(boxes) == 0:
                     continue
                 img, mats = to_device(img, mats, dev)
                 t = model.get_targets([boxes.to(dev)], [labels.to(dev)])
-                tot += float(car_only_loss(model, t, model(img, mats)))
+                tot += float(car_loss(model, t, model(img, mats), ignore.to(dev)))
         return tot / max(len(val), 1)
 
     v0 = evaluate()
@@ -388,12 +441,12 @@ def main():
                 img, mats = to_device(img, mats, dev)
                 loss = gps_loss(model, model(img, mats), {k: v.to(dev) for k, v in boxes.items()}, args.mode)
             else:
-                img, mats, boxes, labels = load_sample(c, f, K, l2c)
+                img, mats, boxes, labels, ignore = load_sample(c, f, K, l2c)
                 if len(boxes) == 0:
                     continue
                 img, mats = to_device(img, mats, dev)
                 targets = model.get_targets([boxes.to(dev)], [labels.to(dev)])
-                loss = car_only_loss(model, targets, model(img, mats))
+                loss = car_loss(model, targets, model(img, mats), ignore.to(dev))
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(trainable, 10.0)

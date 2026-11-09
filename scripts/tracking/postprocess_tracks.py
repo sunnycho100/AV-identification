@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from filterpy.kalman import KalmanFilter
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "scripts/tracking"), str(ROOT / "scripts/evaluation")]
@@ -30,6 +31,7 @@ from score_heading import coasted       # noqa: E402
 
 
 V_MAX = 45.0     # m/s (100 mph); no car in these clips goes faster, so a faster jump is a wrong join
+BIRTH_SCORE = 0.45   # run_ab3dmot.HIGH_SCORE: a box under it can only continue a track
 
 
 def footprint_cov(cam, f, px):
@@ -156,7 +158,21 @@ def finite_velocity(states):
     return out
 
 
-def clean(track, fps, times=None, q_vel=None, cov=None):
+def ca_model(dt, q_jerk):
+    """F and Q of a constant-acceleration model [x, y, vx, vy, ax, ay] with white-noise jerk q_jerk (D25)."""
+    F = np.eye(6)
+    F[0, 2] = F[1, 3] = F[2, 4] = F[3, 5] = dt
+    F[0, 4] = F[1, 5] = dt * dt / 2
+    blk = q_jerk * np.array([[dt ** 5 / 20, dt ** 4 / 8, dt ** 3 / 6], [dt ** 4 / 8, dt ** 3 / 3, dt ** 2 / 2],
+                             [dt ** 3 / 6, dt ** 2 / 2, dt]])
+    Q = np.zeros((6, 6))
+    for ax in (0, 1):
+        i = [ax, ax + 2, ax + 4]
+        Q[np.ix_(i, i)] = blk
+    return F, Q
+
+
+def clean(track, fps, times=None, q_vel=None, cov=None, low_noise=1.0, q_jerk=None):
     """One track (list of states) to its trimmed, smoothed copy. None if nothing is left.
 
     Missing frames (a stitched gap) are filled with copies of the previous state
@@ -168,7 +184,13 @@ def clean(track, fps, times=None, q_vel=None, cov=None):
     treated as missing. Without it, frame / fps. Each state gets its t_s.
 
     cov (footprint_cov): per-detection measurement noise added to the base 0.5 m,
-    so positions far from the camera, where a pixel is metres, count for less."""
+    so positions far from the camera, where a pixel is metres, count for less.
+
+    low_noise multiplies that noise for a box under BIRTH_SCORE (a low-score
+    continuation), so a weak box counts for less than the prediction (1 = off).
+
+    q_jerk switches to a constant-acceleration model with that jerk noise (D25);
+    None keeps the constant-velocity model."""
     c = coasted(track)
     last = len(track) - 1 - int(np.argmax(~c[::-1]))      # last detected state
     track, c = [dict(s) for s in track[:last + 1]], list(c[:last + 1])
@@ -191,19 +213,28 @@ def clean(track, fps, times=None, q_vel=None, cov=None):
     if len(track) < 3:
         return track
     kf = build_kf(1.0 / fps)
+    if q_jerk:                                            # constant acceleration: 6 states, same R
+        R = kf.R.copy()
+        kf = KalmanFilter(dim_x=6, dim_z=2)
+        kf.H, kf.R, kf.P = np.eye(2, 6), R, np.diag([1, 1, 100, 100, 10, 10.])
     Q1 = kf.Q * fps                                       # process noise per second
     if q_vel is not None:                                 # velocity random-walk strength, m^2/s^3
         Q1[2, 2] = Q1[3, 3] = q_vel
     R0 = kf.R.copy()
-    kf.x = np.array([track[0]["x"], track[0]["y"], 0, 0.])
+    kf.x = np.array([track[0]["x"], track[0]["y"]] + [0.0] * (kf.dim_x - 2))
     means, covs, Fs, Qs = [], [], [], []
     for i, (s, miss) in enumerate(zip(track, c)):
         dt = t[i] - t[i - 1] if i else 1.0 / fps
-        kf.F[0, 2] = kf.F[1, 3] = dt
-        kf.Q = Q1 * dt
+        if q_jerk:
+            kf.F, kf.Q = ca_model(dt, q_jerk)
+        else:
+            kf.F[0, 2] = kf.F[1, 3] = dt
+            kf.Q = Q1 * dt
         kf.predict()
         if not miss:
             kf.R = R0 + cov(s["x"], s["y"]) if cov else R0
+            if (s.get("score") or 1.0) < BIRTH_SCORE:
+                kf.R = kf.R * low_noise
             kf.update(np.array([s["x"], s["y"]]))
         means.append(kf.x.copy())
         covs.append(kf.P.copy())
@@ -211,7 +242,7 @@ def clean(track, fps, times=None, q_vel=None, cov=None):
         Qs.append(kf.Q.copy())
     sm, _, _, _ = kf.rts_smoother(np.array(means), np.array(covs), Fs, Qs)
     for s, m in zip(track, sm):
-        s["x"], s["y"], s["vx"], s["vy"] = (float(v) for v in m)
+        s["x"], s["y"], s["vx"], s["vy"] = (float(v) for v in m[:4])
         s["speed_mps"] = float(np.hypot(m[2], m[3]))
     if times:                                             # a frozen copy is not a new moment: drop its state
         track = [s for s in track if not times.get(s["frame"], (0, False))[1]]
@@ -309,6 +340,14 @@ def _selfcheck():
     assert [len(p) for p in remove_jumps(run3, 30)] == [57], [len(p) for p in remove_jumps(run3, 30)]
     gap_raw = [dict(s, x_det=s["x"], y_det=s["y"]) for s in gap]                 # filled frames carry no measurement
     assert sum("x_det" in s for s in clean(gap_raw, 30)) == len(gap)
+    weak = [dict(s, y=1.0, score=0.3) if s["frame"] == 30 else s for s in car]   # one weak box 1 m off
+    y1, y16 = (next(s["y"] for s in clean(weak, 30, low_noise=k) if s["frame"] == 30) for k in (1.0, 16.0))
+    assert abs(y16) < abs(y1) / 2, (y1, y16)
+    brake = [{"frame": f, "x": 20 * f / 30 - (f / 30) ** 2 + rng.normal(0, 0.3), "y": 0.0, "score": 0.6 + f * 1e-3,
+              "vx": float(f)} for f in range(120)]                                     # 2 m/s^2 braking, 0.3 m noise
+    v_ca = np.array([s["speed_mps"] for s in clean(brake, 30, q_jerk=1.0)])
+    a_ca = (v_ca[75] - v_ca[45]) / 1.0
+    assert abs(a_ca + 2.0) < 0.6, a_ca
     rs = raw_states(tr["a"], asg["a"], 30)
     assert len(rs) == 10 and rs[3]["x"] == 2.0 and rs[3]["y"] == 0.05 and rs[3]["yaw"] == 0.1
     print(f"selfcheck ok (55 of 60 states kept, early speed {early:.2f} m/s, lateral std {lat:.3f} m, "

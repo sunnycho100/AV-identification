@@ -85,7 +85,25 @@ def test_low_score_alone_never_starts_a_track():
     print("ok: a lone low-score detection never births a track")
 
 
+def test_confirmed_low_score_starts_one_track():
+    """D31: a weak box a 2D box agrees with may start a track, but never a second one on a car."""
+    byte = lambda: rt.ByteAB3DMOT(rt.build_cfg(), cat="Car", low_thresh=0.20, confirm_birth=True, ID_init=0)
+    confirmed = lambda f: (*car(f, LOW), np.array([True]))
+    assert len(rt.track_frames(byte(), list(range(N)), confirmed, 30.0)) == 1, "confirmed weak box did not start a track"
+    unconfirmed = lambda f: (*car(f, LOW), np.array([False]))
+    assert rt.track_frames(byte(), list(range(N)), unconfirmed, 30.0) == {}, "unconfirmed weak box started a track"
+
+    def twin(f):                                  # a strong box and a confirmed weak box on the same car
+        d, i = car(f, HIGH)
+        dl, il = car(f, LOW)
+        dl[0, 3] += 0.5
+        return np.vstack([d, dl]), np.vstack([i, il]), np.array([False, True])
+    assert len(rt.track_frames(byte(), list(range(N)), twin, 30.0)) == 1, "a second track started on one car"
+    print("ok: a confirmed weak box starts one track, never a duplicate")
+
+
 if __name__ == "__main__":
     test_low_score_continues_a_track()
     test_low_score_alone_never_starts_a_track()
+    test_confirmed_low_score_starts_one_track()
     print("all ok")

@@ -45,6 +45,7 @@ from AB3DMOT_libs.model import AB3DMOT  # noqa: E402
 TAG = "our_intrinsics"
 DEFAULT_FPS = 12.0  # DAIR-V2X-I 12 Hz; new datasets pass --fps (Camera data clips are 30)
 TRACK_CLASS = "car"   # v0: vehicles only (the AV-vs-human question)
+DUP_M = 2.0           # D31: a confirmed weak box starts no track within this distance of a box or track
 HIGH_SCORE = 0.45     # birth gate: anything at least this is a normal detection,
                       # below it is a ByteTrack-style leftover (see the docstring)
 DEFAULT_LOW_THRESH = 0.20  # the detector's export floor: the whole weak band
@@ -79,12 +80,15 @@ class ByteAB3DMOT(AB3DMOT):
     are not repeated here.
     """
 
-    def __init__(self, cfg, cat, low_thresh, **kwargs):
+    def __init__(self, cfg, cat, low_thresh, low_gate=None, confirm_birth=False, **kwargs):
         super().__init__(cfg, cat, **kwargs)
         self.low_thresh = low_thresh
+        self.confirm_birth = confirm_birth   # D31: a weak box a 2D box agrees with may start a track
+        self.low_gate = low_gate        # m: a low-score box joins a track only this close to its prediction (D29)
 
     def track(self, dets_all, frame, seq_name):
         dets, info = dets_all["dets"], dets_all["info"]
+        conf = dets_all.get("conf", np.zeros(len(dets), bool))
         self.frame_count += 1
         self.id_past_output = copy.copy(self.id_now_output)
         self.id_past = [trk.id for trk in self.trackers]
@@ -98,17 +102,26 @@ class ByteAB3DMOT(AB3DMOT):
             dets_high, trks, self.metric, self.thres, self.algm)
         self.update(matched, unmatched_trks, dets_high, info[high])
 
+        dets_low, low_used = None, set()
         if low.any() and len(unmatched_trks):
             dets_low = self.process_dets(dets[low])
-            m, _, _, _, _ = data_association(
-                dets_low, [trks[t] for t in unmatched_trks],
-                self.metric, self.thres, self.algm)
+            sub = [trks[t] for t in unmatched_trks]
+            m, _, _, _, _ = data_association(dets_low, sub, self.metric, self.thres, self.algm)
+            if self.low_gate:
+                m = [(d, t) for d, t in m if np.hypot(dets_low[d].x - sub[t].x, dets_low[d].y - sub[t].y) <= self.low_gate]
+            low_used = {int(d) for d, _ in m}
             # association ran on a subset of the tracks, so map back to self.trackers
             m = np.array([(d, unmatched_trks[t]) for d, t in m], dtype=int).reshape(-1, 2)
             rest = [t for t in range(len(self.trackers)) if t not in set(m[:, 1])]
             self.update(m, rest, dets_low, info[low])
 
-        self.birth(dets_high, info[high], unmatched_dets)   # low scores never start a track
+        self.birth(dets_high, info[high], unmatched_dets)   # low scores never start a track ...
+        if self.confirm_birth and low.any():                 # ... unless a 2D box agrees (D31)
+            dl = dets_low if dets_low is not None else self.process_dets(dets[low])
+            taken = [(b.x, b.y) for b in dets_high] + [(b.x, b.y) for b in trks]   # no second track on a car
+            free = lambda b: all(np.hypot(b.x - x, b.y - y) > DUP_M for x, y in taken)
+            cl = conf[low]
+            self.birth(dl, info[low], [i for i in range(len(dl)) if cl[i] and i not in low_used and free(dl[i])])
         results = self.output()
         results = [np.concatenate(results)] if results else [np.empty((0, 15))]
         self.id_now_output = results[0][:, 7].tolist()
@@ -120,15 +133,16 @@ def load_frame_dets(frame_id, path=None):
     if path is None:
         path = DET_DIR / f"{frame_id:06d}_pred.json"
     objs = json.loads(path.read_text())
-    dets, info = [], []
+    dets, info, conf = [], [], []
     for o in objs:
         if o["class_name"] != TRACK_CLASS:
             continue
         dets.append([o["h"], o["w"], o["l"], o["x"], o["y"], o["z"], o["yaw"]])
         info.append([o["score"]])
+        conf.append(bool(o.get("confirmed", False)))
     if not dets:
-        return np.empty((0, 7)), np.empty((0, 1))
-    return np.array(dets, dtype=float), np.array(info, dtype=float)
+        return np.empty((0, 7)), np.empty((0, 1)), np.zeros(0, bool)
+    return np.array(dets, dtype=float), np.array(info, dtype=float), np.array(conf, bool)
 
 
 def track_frames(tracker, frame_ids, load, frame_rate_hz):
@@ -138,8 +152,10 @@ def track_frames(tracker, frame_ids, load, frame_rate_hz):
     """
     trajectories = {}
     for frame in frame_ids:
-        dets, info = load(frame)
-        results, _ = tracker.track({"dets": dets, "info": info}, frame, TAG)
+        out = load(frame)
+        dets, info = out[0], out[1]
+        conf = out[2] if len(out) > 2 else np.zeros(len(dets), bool)   # 2D agreement flag (D31)
+        results, _ = tracker.track({"dets": dets, "info": info, "conf": conf}, frame, TAG)
         arr = results[0]  # rows: [h,w,l,x,y,z,theta, ID, score]
 
         # per-frame velocity lives in the live Kalman state, not in the output array
@@ -174,6 +190,9 @@ def main():
                     help="detections dir (default: outputs/object_detection/<TAG>)")
     ap.add_argument("--out-dir", default=None,
                     help="output dir (default: outputs/tracking/<TAG>)")
+    ap.add_argument("--confirm-birth", action="store_true", help="D31: weak boxes flagged confirmed by a 2D box may start tracks")
+    ap.add_argument("--low-gate", type=float, default=0.0,
+                    help="m; a low-score box may continue a track only within this distance of its prediction (0 = off, D29)")
     ap.add_argument("--low-thresh", type=float, default=DEFAULT_LOW_THRESH,
                     help=f"two-stage association: detections scoring "
                          f"[this, {HIGH_SCORE}) may continue an existing track but "
@@ -207,7 +226,7 @@ def main():
     print(f"Tracking '{TRACK_CLASS}' over {len(frame_ids)} frames "
           f"({frame_ids[0]:06d}..{frame_ids[-1]:06d}) from {DET_DIR}")
 
-    tracker = ByteAB3DMOT(build_cfg(), cat="Car", low_thresh=args.low_thresh, ID_init=0)
+    tracker = ByteAB3DMOT(build_cfg(), cat="Car", low_thresh=args.low_thresh, low_gate=args.low_gate or None, confirm_birth=args.confirm_birth, ID_init=0)
     if args.max_age is not None:
         tracker.max_age = args.max_age
 
@@ -219,7 +238,7 @@ def main():
     out_path = out_dir / "tracks.json"
     out_path.write_text(json.dumps({
         "meta": {"tag": TAG, "frame_rate_hz": frame_rate_hz, "class": TRACK_CLASS,
-                 "low_thresh": args.low_thresh,
+                 "low_thresh": args.low_thresh, "low_gate": args.low_gate,
                  "frames": [frame_ids[0], frame_ids[-1]], "num_tracks": len(trajectories)},
         "tracks": trajectories,
     }, indent=2))

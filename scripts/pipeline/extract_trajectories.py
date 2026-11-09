@@ -45,6 +45,7 @@ import stitch_tracks as st        # noqa: E402
 from score_heading import coasted  # noqa: E402
 
 PY = sys.executable
+LOW_IOU = 0.3     # D29: overlap with a 2D car box that confirms a low-score 3D box (set before running)
 DEFAULTS = {
     "tag": "ft102",
     "det_tag": "",            # detections from another run's tag (e.g. a smoother sweep); "" = tag
@@ -53,6 +54,11 @@ DEFAULTS = {
     "extrinsic": "metric_extrinsic_h151_dpm031.json",
     "score_thresh": 0.45, "track_low_thresh": 0.45, "max_age": 6, "fps": 30, "q_vel": 0.1,
     "px_noise": 1.0,          # pixels of ground-point noise, turned into metres by range (0 = off)
+    "low_noise": 1.0,         # noise multiplier for boxes under the birth score (D21; 1 = off)
+    "q_jerk": 0.0,            # constant-acceleration RTS with this jerk noise (D25; 0 = constant velocity)
+    "low_filter": "",         # D29: "overlay" drops low-score boxes on burnt-in text; "overlay2d" also needs a 2D car box
+    "low_gate_m": 0.0,        # D29: a low-score box joins a track only within this distance of its prediction (0 = off)
+    "confirm_floor": 0.10,    # D31 (low_filter confirm): lowest score of a 2D-confirmed weak box
     "max_m_per_px": 1.0,      # drop detections where one pixel covers more road than this (near the horizon)
     # ablation switches (defaults = the pipeline as before). Any other value works on
     # the raw detections (postprocess_tracks.raw_states) instead of tracker output:
@@ -164,6 +170,54 @@ def export(tracks, centres, out_dir, fps):
     return rows_per
 
 
+def low_filter(clip, road_dir, cal, mode, low_thresh=0.45, floor=0.0):
+    """D29: drop low-score boxes (under the birth score) whose footprint is on the burnt-in caption, logo
+    or tag; with mode overlay2d also those whose projected outline overlaps no 2D car, truck or bus box
+    (IoU under LOW_IOU). Mode confirm (D31) flags weak boxes a 2D box agrees with as confirmed (they may
+    start tracks), keeps unconfirmed ones only from low_thresh and confirmed ones only from floor.
+    Confident boxes are never touched. Returns the number dropped."""
+    sys.path[:0] = [str(ROOT), str(ROOT / "scripts/calibration")]
+    from focal_from_rotation import static_mask
+    from evaluators.result2kitti import get_lidar_3d_8points
+    K, M = np.array(cal["K"]), np.array(cal["lidar2cam"])
+    on_text = static_mask(np.zeros((1080, 1920, 3), np.uint8)) == 0
+    d2 = ROOT / "outputs/object_detection/camera-data" / f"{clip}_det2d"
+    n = 0
+    for p in road_dir.glob("*_pred.json"):
+        boxes = json.loads(p.read_text())
+        b2 = np.array([b["box2d"] for b in json.loads((d2 / p.name).read_text())]).reshape(-1, 4) \
+            if mode in ("overlay2d", "confirm") and (d2 / p.name).exists() else np.zeros((0, 4))
+        keep = []
+        for b in boxes:
+            if b["score"] >= pp.BIRTH_SCORE:
+                keep.append(b)
+                continue
+            c = np.asarray(get_lidar_3d_8points([b["l"], b["w"], b["h"]], b["yaw"], [b["x"], b["y"], b["z"] + b["h"] / 2]))
+            q = (M @ np.c_[c, np.ones(8)].T)[:3]
+            if (q[2] <= 1).any():
+                n += 1
+                continue
+            uv = (K @ q)[:2] / (K @ q)[2]
+            u, v = int(np.clip(uv[0, :4].mean(), 0, 1919)), int(np.clip(uv[1, :4].mean(), 0, 1079))   # footprint centre
+            ok = mode == "confirm" or not on_text[v, u]
+            if ok and mode in ("overlay2d", "confirm"):
+                x0, y0, x1, y1 = uv[0].min(), uv[1].min(), uv[0].max(), uv[1].max()
+                iw = np.clip(np.minimum(x1, b2[:, 2]) - np.maximum(x0, b2[:, 0]), 0, None)
+                ih = np.clip(np.minimum(y1, b2[:, 3]) - np.maximum(y0, b2[:, 1]), 0, None)
+                inter = iw * ih
+                union = (x1 - x0) * (y1 - y0) + (b2[:, 2] - b2[:, 0]) * (b2[:, 3] - b2[:, 1]) - inter
+                ok = bool(len(b2)) and float((inter / union).max()) >= LOW_IOU
+                if mode == "confirm":
+                    b["confirmed"] = ok
+                    ok = b["score"] >= (floor if ok else low_thresh)
+            if ok:
+                keep.append(b)
+            else:
+                n += 1
+        p.write_text(json.dumps(keep))
+    return n
+
+
 def main():
     ap = argparse.ArgumentParser("Clip frames to per-vehicle trajectories")
     ap.add_argument("--clip", required=True)
@@ -222,10 +276,13 @@ def main():
             n_far += len(boxes) - len(keep)
             p.write_text(json.dumps(keep))
     print(f"   usable range {r_max:.0f} m ({a.max_m_per_px} m per pixel): dropped {n_far} farther boxes")
+    if a.low_filter:
+        print(f"   low-score filter {a.low_filter}: dropped {low_filter(a.clip, road_dir, cal, a.low_filter, a.track_low_thresh, a.confirm_floor)} boxes")
     print("3. track")
     trk = ROOT / "outputs/tracking/camera-data" / f"{run_name}_road"
     run([PY, "scripts/tracking/run_ab3dmot.py", "--det-dir", road_dir,
-         "--out-dir", trk, "--low-thresh", a.track_low_thresh, "--max-age", a.max_age, "--fps", a.fps])
+         "--out-dir", trk, "--low-thresh", min(a.track_low_thresh, a.confirm_floor) if a.low_filter == "confirm" else a.track_low_thresh,
+         "--low-gate", a.low_gate_m, "--max-age", a.max_age, "--fps", a.fps] + (["--confirm-birth"] if a.low_filter == "confirm" else []))
     d = json.loads((trk / "tracks.json").read_text())
     print("4. stitch")
     tracks, joined = st.stitch(d["tracks"], a.fps)
@@ -250,7 +307,7 @@ def main():
             pieces[str(nid)], nid = part, nid + 1
     n_split = len(pieces) - len(tracks)
     if a.smooth == "rts":
-        tracks = {k: pp.clean(v, a.fps, times, a.q_vel, cov) for k, v in pieces.items()}
+        tracks = {k: pp.clean(v, a.fps, times, a.q_vel, cov, a.low_noise, a.q_jerk or None) for k, v in pieces.items()}
     else:
         tracks = {k: pp.finite_velocity(v) for k, v in pieces.items()}
     tracks = {k: v for k, v in tracks.items() if len(v) >= 3}

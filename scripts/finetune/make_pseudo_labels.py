@@ -79,14 +79,26 @@ def main():
     ap = argparse.ArgumentParser("Build pseudo-labels from tracks")
     ap.add_argument("--clip", required=True)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--run", default="phase1", help="detection and tracking run the labels come from")
+    ap.add_argument("--min-det-coverage", type=float, default=MIN_DET_COVERAGE, help="track gate; 0.5 for round 2 (D33b)")
+    ap.add_argument("--label-floor", type=float, default=0.3, help="lowest detection score that becomes a label; 0.10 on a 2D-confirmed set (D33c)")
+    ap.add_argument("--min-median-score", type=float, default=MIN_MEDIAN_SCORE,
+                    help="track gate; 0.30 for round 2, where weak tracks need 2D agreement to start (D33)")
     args = ap.parse_args()
     clip = args.clip
 
-    det_dir = ROOT / f"outputs/object_detection/camera-data/{clip}_phase1"
-    trk = ROOT / f"outputs/tracking/camera-data/{clip}_phase1/tracks.json"
+    det_dir = ROOT / f"outputs/object_detection/camera-data/{clip}_{args.run}"
+    trk = ROOT / f"outputs/tracking/camera-data/{clip}_{args.run}/tracks.json"
     cal = json.loads((det_dir / "calibration_used.json").read_text())
     road_z = cal["road_plane_z_in_output"]
-    tracks = json.loads(trk.read_text())["tracks"]
+    tj = json.loads(trk.read_text())
+    tracks = tj["tracks"]
+    # Velocity labels are in metres per FRAME, the unit of raw AB3DMOT states and of the
+    # round-1 labels. The pipeline's smoothed tracks (extract_trajectories, states carry
+    # t_s) store metres per second; a single image cannot show 27 m/s, and such targets
+    # swamped the round-2 loss (D34 setup), so convert them.
+    first = next((s for st in tracks.values() for s in st), {})
+    v_scale = 1.0 / tj["meta"]["frame_rate_hz"] if "t_s" in first else 1.0
 
     # per-frame detection sizes, so a label's dimensions come from real detections
     sizes = {}
@@ -94,7 +106,7 @@ def main():
         f = int(pf.stem.split("_")[0])
         sizes[f] = [(np.array([o["x"], o["y"]]), (o["l"], o["w"], o["h"]), o["score"])
                     for o in json.loads(pf.read_text())
-                    if o["class_name"] == "car" and o["score"] >= 0.3]
+                    if o["class_name"] == "car" and o["score"] >= args.label_floor]
 
     def det_for(f, s):
         best, bd = None, 2.0
@@ -116,11 +128,11 @@ def main():
             continue
         matched_all = [(i, s, det_for(s["frame"], s)) for i, s in enumerate(states)]
         matched = [(i, s, m) for i, s, m in matched_all if m is not None]
-        if len(matched) < MIN_DET_COVERAGE * len(states):
+        if len(matched) < args.min_det_coverage * len(states):
             rejected["no_detection"] += 1
             continue
         scores = [m[1] for _, _, m in matched]
-        if float(np.median(scores)) < MIN_MEDIAN_SCORE:
+        if float(np.median(scores)) < args.min_median_score:
             rejected["low_score"] += 1
             continue
         if abs(float(np.median([s["z"] for s in states])) - road_z) > ROAD_Z_TOL:
@@ -147,7 +159,7 @@ def main():
                 "yaw": float(yaws[i]),                       # from motion
                 # the head regresses velocity too (code weight 0.5), so labels
                 # must carry it or training would teach "every car is stationary"
-                "vx": float(s["vx"]), "vy": float(s["vy"]),
+                "vx": float(s["vx"]) * v_scale, "vy": float(s["vy"]) * v_scale,   # m per frame
                 "score": float(m[1]),
                 "yaw_source": "track_motion", "z_source": "road_plane",
             })
@@ -164,7 +176,7 @@ def main():
         f = int(pf.stem.split("_")[0])
         rows = []
         for o in json.loads(pf.read_text()):
-            if o["class_name"] != "car" or o["score"] < 0.3:
+            if o["class_name"] != "car" or o["score"] < args.label_floor:
                 continue
             # nearest match, not exact: track states are Kalman-filtered so they
             # never equal the detection they came from
@@ -194,7 +206,7 @@ def main():
         "frames_with_labels": len(kept), "labels": n_labels, "tracks_used": n_tracks,
         "tracks_total": len(tracks), "rejected": rejected,
         "gates": {"min_track_frames": MIN_TRACK_FRAMES, "min_mean_speed": MIN_MEAN_SPEED,
-                  "min_median_score": MIN_MEDIAN_SCORE,
+                  "min_median_score": args.min_median_score, "min_det_coverage": args.min_det_coverage,
                   "max_yaw_jitter_deg": MAX_YAW_JITTER_DEG},
         "provenance": "position from track; yaw from motion; z from road plane; "
                       "dims from per-track median. GPS not used.",
@@ -202,6 +214,9 @@ def main():
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     manifest["labels_corrected"] = n_corr
     manifest["labels_kept_as_model"] = n_orig
+    speeds = [np.hypot(o["vx"], o["vy"]) for labs in kept.values() for o in labs if o["track_id"] is not None]
+    assert not speeds or float(np.median(speeds)) < 3.0, (
+        f"median label speed {np.median(speeds):.1f} m/frame: velocities are in m/s, not m per frame")
     print(f"{clip}: {n_labels} labels on {len(kept)} frames "
           f"({n_corr} track-corrected, {n_orig} kept as model output) "
           f"from {n_tracks}/{len(tracks)} tracks")
