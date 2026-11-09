@@ -46,7 +46,10 @@ def main():
     a = ap.parse_args()
     run = f"{a.clip}_{a.tag}"
     traj = ROOT / "outputs/trajectories" / run
-    cal = json.load(open(ROOT / "outputs/object_detection/camera-data" / run / "calibration_used.json"))
+    det = run   # runs made with a detection tag of their own (e.g. iv_s4) name it in run.json
+    if (traj / "run.json").exists():
+        det = f"{a.clip}_{json.load(open(traj / 'run.json'))['settings'].get('det_tag') or a.tag}"
+    cal = json.load(open(ROOT / "outputs/object_detection/camera-data" / det / "calibration_used.json"))
     k34 = np.zeros((3, 4)); k34[:3, :3] = np.array(cal["K"]); l2c = np.array(cal["lidar2cam"])
     tracks = json.load(open(traj / "tracks.json"))["tracks"]
     inst = traj / "instrumented.json"
@@ -61,6 +64,7 @@ def main():
     for i, f in enumerate(frames):
         img = cv2.imread(str(f))
         draw_states(img, by_frame.get(i, []), k34, l2c, mark)
+        cv2.putText(img, f"{run} frame {i}  marked car: {mark or 'none'}", (20, 40), 0, 1.0, (0, 0, 0), 7)
         cv2.putText(img, f"{run} frame {i}  marked car: {mark or 'none'}", (20, 40), 0, 1.0, (255, 255, 255), 3)
         cv2.imwrite(str(out / f"{i:03d}.jpg"), img)
     mp4 = out / f"{run}_trajectories.mp4"
