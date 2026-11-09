@@ -12,6 +12,7 @@ This research workspace connects camera calibration, BEVHeight/MOT reconstructio
 - [All research entry points](code/docs/CODE_INDEX.md)
 - [Current results and limitations](code/docs/RESULTS_OVERVIEW.md)
 - [Stabilization experiment: collaborator handoff](code/docs/STABILIZATION_HANDOFF.md)
+- [Todd 2026 passes: evaluation, 2D-confirmed tracking and round-2 self-training](code/docs/TODD_2026_TRAJECTORY.md)
 - [Preparing a GitHub source release](code/docs/RELEASE.md)
 
 ## Layout

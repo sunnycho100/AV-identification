@@ -75,7 +75,10 @@ def load_clip(clip, tag="ft102"):
     tracks = json.loads((run / "tracks.json").read_text())["tracks"]
     inst = run / "instrumented.json"
     vid = json.loads(inst.read_text())["vehicle_id"] if inst.exists() else None
-    n = len(list((ROOT / f"data/camera-data/{clip}/frames_all").glob("*.jpg")))
+    ft = ROOT / f"data/camera-data/{clip}/frame_times.json"
+    # frame_times.json lists every extracted frame; frames_all may be partly pruned locally (kept on the server)
+    n = len(json.loads(ft.read_text())["frames"]) if ft.exists() else \
+        len(list((ROOT / f"data/camera-data/{clip}/frames_all").glob("*.jpg")))
     t, copy = frame_times(clip, n)
     det_tag = json.loads((run / "run.json").read_text())["settings"].get("det_tag") or tag
     cal = json.loads((ROOT / "outputs/object_detection/camera-data" / f"{clip}_{det_tag}" / "calibration_used.json").read_text())

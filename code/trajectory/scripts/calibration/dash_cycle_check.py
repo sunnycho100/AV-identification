@@ -9,6 +9,9 @@ of neighbouring dashes, divided by 15.24 m, is the calibration's scale error;
 how it changes with range shows a pitch error.
 
     /Users/sunghwan_cho/miniforge/bin/python3.12 scripts/calibration/dash_cycle_check.py AV_T_EW_3 out.jpg
+Other calibrations: append name=file:height pairs (the first one sets the vanishing
+point and the dash filter), e.g. vp_dp0=metric_extrinsic_site.json:15.1.
+Without a road_mask.png the projected road band of road_mask.py is used instead.
 Writes out.jpg (detected dashes in red, lateral position in yellow) and out.json.
 Lines whose dashes sit off the fitted 15.24 m lattice by more than RESID_MAX m rms are
 left out of the summary: they are solid lines or two lines merged, and on 2026-10-06
@@ -21,23 +24,34 @@ cal=f"outputs/calibration/camera-data/{CLIP}/"
 k=json.load(open(glob.glob(cal+"*_anycalib_pinhole_pinhole.json")[0]))["prediction"]["intrinsics"][:4]
 K=np.array([[k[0],0,k[2]],[0,k[1],k[3]],[0,0,1]])
 CAL={"h15.1_dp-0.31":("metric_extrinsic_h151_dpm031.json",15.1),"h15.6_dp0":("metric_extrinsic_site_h156.json",15.6)}
+VP_NAME,R0_NAME="h15.6_dp0","h15.1_dp-0.31"
+if len(sys.argv)>3:
+    CAL={a.split("=")[0]:(a.split("=")[1].split(":")[0],float(a.split(":")[1])) for a in sys.argv[3:]}
+    VP_NAME=R0_NAME=next(iter(CAL))
 Rs={n:np.array(json.load(open(cal+f))["rotation"]) for n,(f,h) in CAL.items()}
 def ground(R,h,uv):
     d=R.T@(np.linalg.inv(K)@np.c_[uv,np.ones(len(uv))].T); s=-h/d[2]; return np.c_[s*d[0],s*d[1]]
 fr=sorted(glob.glob(f"data/camera-data/{CLIP}/frames_all/*.jpg"))[::10]
 bgc=np.median(np.stack([cv2.imread(f) for f in fr]),0).astype(np.uint8)
 g=cv2.cvtColor(bgc,cv2.COLOR_BGR2GRAY)
-vp=K@Rs["h15.6_dp0"]@np.array([1.,0,0]); vp=vp[:2]/vp[2]
-road=cv2.imread(cal+"road_mask.png",0)>0
+vp=K@Rs[VP_NAME]@np.array([1.,0,0]); vp=vp[:2]/vp[2]
+R0,H0=Rs[R0_NAME],CAL[R0_NAME][1]
+try:
+    road=cv2.imread(cal+"road_mask.png",0)>0
+except TypeError:                                  # no mask built yet: project the road band
+    sys.path.insert(0,"scripts/object_detection"); from road_mask import ROAD_X,ROAD_Y
+    xs=np.geomspace(*ROAD_X,60); band=[(x,ROAD_Y[0]) for x in xs]+[(x,ROAD_Y[1]) for x in xs[::-1]]
+    q=np.array([R0@(np.array([x,y,0.])-np.array([0,0,H0])) for x,y in band]); q=q[q[:,2]>0.5]
+    uv=(K@q.T).T; uv=uv[:,:2]/uv[:,2:]
+    road=np.zeros(g.shape,np.uint8); cv2.fillPoly(road,[uv.round().astype(np.int32)],1); road=road>0
 segs=cv2.createLineSegmentDetector(cv2.LSD_REFINE_STD).detect(g)[0][:,0]
-R0=Rs["h15.1_dp-0.31"]
 keep=[]
 for x1,y1,x2,y2 in segs:
     a,b=np.array([x1,y1]),np.array([x2,y2]); m=(a+b)/2
     if not road[int(m[1]),int(m[0])] or (m[0]<560 and m[1]>980) or m[1]<vp[1]+30: continue
     d=(b-a)/np.linalg.norm(b-a); n=np.array([-d[1],d[0]])
     if abs(n@(vp-a))>8+0.01*np.linalg.norm(m-vp): continue            # must point at the VP
-    G=ground(R0,15.1,np.array([a,b]))
+    G=ground(R0,H0,np.array([a,b]))
     if np.linalg.norm(G[1]-G[0])<1.5: continue
     keep.append((a,b,G))
 # keep white paint only (contrast tape has a black tail): brighter than both sides
@@ -80,6 +94,7 @@ for grp in groups:
         if len(x)<4 or not (13<c[1]<17.5): continue
         gaps=np.diff(x)/np.maximum(np.diff(kk),1); ok=np.diff(kk)>0
         res[name].append(dict(lateral=round(ylat,1),n=len(x),x=[round(float(v),1) for v in x],period=round(float(c[1]),3),
+                              uv=[[round(float(u),1),round(float(v),1)] for u,v in uvs],   # all dash image points (for roll fits)
                               resid_rms=round(float(np.sqrt(np.mean(resid**2))),2),
                               cycles=[(round(float(a),1),round(float(b),2)) for a,b in zip(x[:-1][ok],gaps[ok])]))
 cv2.imwrite(OUT,vis)

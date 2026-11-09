@@ -25,7 +25,7 @@
   },
   {
     "path": "code/classification/trajectory-avlike-transformer/data/data_transformation.py",
-    "bytes": 8216,
+    "bytes": 8209,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -115,13 +115,13 @@
   },
   {
     "path": "code/classification/trajectory-avlike-transformer/src/dataset.py",
-    "bytes": 7070,
+    "bytes": 6983,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
   {
     "path": "code/classification/trajectory-avlike-transformer/src/evaluate.py",
-    "bytes": 3224,
+    "bytes": 3127,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -133,7 +133,7 @@
   },
   {
     "path": "code/classification/trajectory-avlike-transformer/src/features.py",
-    "bytes": 6511,
+    "bytes": 6359,
     "group": "Trajectory extraction and evaluation",
     "description": "Merge raw AV/HV trajectory CSVs and compute the 12-dim behavior features."
   },
@@ -157,7 +157,7 @@
   },
   {
     "path": "code/classification/trajectory-avlike-transformer/src/model.py",
-    "bytes": 3843,
+    "bytes": 3749,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -205,7 +205,7 @@
   },
   {
     "path": "code/classification/trajectory-avlike-transformer/src/utils.py",
-    "bytes": 1592,
+    "bytes": 1529,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -403,43 +403,43 @@
   },
   {
     "path": "code/review_web/public/app.js",
-    "bytes": 15895,
+    "bytes": 15838,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
   {
     "path": "code/review_web/public/hub/app.js",
-    "bytes": 1392,
+    "bytes": 1326,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
   {
     "path": "code/review_web/public/trajectory/app.js",
-    "bytes": 20326,
+    "bytes": 20102,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
   {
     "path": "code/review_web/server.py",
-    "bytes": 16396,
+    "bytes": 16071,
     "group": "Trajectory extraction and evaluation",
     "description": "Stdlib-only review service for VS Code Remote SSH port forwarding."
   },
   {
     "path": "code/review_web/START.ps1",
-    "bytes": 677,
+    "bytes": 692,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
   {
     "path": "code/review_web/tests/test_ssh_review.py",
-    "bytes": 9538,
+    "bytes": 9546,
     "group": "Validation and diagnostics",
     "description": "Run with Python -S: only the standard library is required."
   },
   {
     "path": "code/review_web/tests/test_trajectory_review.py",
-    "bytes": 7146,
+    "bytes": 7148,
     "group": "Validation and diagnostics",
     "description": "Real HTTP round trips against a temporary synthetic project only."
   },
@@ -457,19 +457,19 @@
   },
   {
     "path": "code/review_web/tools/package_release.py",
-    "bytes": 1705,
+    "bytes": 1672,
     "group": "Trajectory extraction and evaluation",
     "description": "Build a source-only release with synthetic demo data, never field data."
   },
   {
     "path": "code/review_web/trajectory_review.py",
-    "bytes": 11499,
+    "bytes": 11434,
     "group": "Human review and identity",
     "description": "Portable project manifests and append-only trajectory interval reviews (stdlib)."
   },
   {
     "path": "code/run.ps1",
-    "bytes": 2343,
+    "bytes": 2387,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -493,7 +493,7 @@
   },
   {
     "path": "code/scripts/audit_workflow_outputs.py",
-    "bytes": 4478,
+    "bytes": 4423,
     "group": "Validation and diagnostics",
     "description": "Check completed artifacts without rerunning models or changing source data."
   },
@@ -505,7 +505,7 @@
   },
   {
     "path": "code/scripts/Build-FieldCatalog.ps1",
-    "bytes": 9134,
+    "bytes": 9255,
     "group": "Workspace and data administration",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -517,7 +517,7 @@
   },
   {
     "path": "code/scripts/build_field_paper.py",
-    "bytes": 2317,
+    "bytes": 2288,
     "group": "Reporting and manuscript",
     "description": "Compile the revised manuscript and render every page for visual review."
   },
@@ -625,7 +625,7 @@
   },
   {
     "path": "code/scripts/evaluate_reviewed_field.py",
-    "bytes": 22929,
+    "bytes": 22626,
     "group": "Human review and identity",
     "description": "Recover reviewed seeds, build bounded windows, and test frozen classifiers."
   },
@@ -637,7 +637,7 @@
   },
   {
     "path": "code/scripts/evaluate_time_alignment.py",
-    "bytes": 13846,
+    "bytes": 13647,
     "group": "Trajectory extraction and evaluation",
     "description": "One constant delay per recording; fit early, evaluate later on fixed support."
   },
@@ -649,7 +649,7 @@
   },
   {
     "path": "code/scripts/evaluate_trajectory_quality.py",
-    "bytes": 22436,
+    "bytes": 22106,
     "group": "Trajectory extraction and evaluation",
     "description": "Evaluate frozen reviewed tracks; all GPS scores retain supplied synchronization."
   },
@@ -673,19 +673,19 @@
   },
   {
     "path": "code/scripts/finalize_field_core.py",
-    "bytes": 20120,
+    "bytes": 19961,
     "group": "Trajectory extraction and evaluation",
     "description": "Reconcile the field-first protocol with workspace and manuscript narratives."
   },
   {
     "path": "code/scripts/finalize_field_workspace.py",
-    "bytes": 6626,
+    "bytes": 6554,
     "group": "Workspace and data administration",
     "description": "Refresh workspace entry points and reproducibility evidence for this pilot."
   },
   {
     "path": "code/scripts/finalize_workflow_paper.py",
-    "bytes": 3081,
+    "bytes": 3054,
     "group": "Reporting and manuscript",
     "description": "Apply small cross-section consistency edits after expanding the methods."
   },
@@ -697,7 +697,7 @@
   },
   {
     "path": "code/scripts/frozen_classifier.py",
-    "bytes": 1116,
+    "bytes": 1089,
     "group": "Classification and training",
     "description": "Compatibility entry for recorded experiments; maintained code lives in code/src/."
   },
@@ -715,7 +715,7 @@
   },
   {
     "path": "code/scripts/leader_review_ui/app.js",
-    "bytes": 15405,
+    "bytes": 15348,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -739,7 +739,7 @@
   },
   {
     "path": "code/scripts/prepare_extension_review.py",
-    "bytes": 6038,
+    "bytes": 5954,
     "group": "Human review and identity",
     "description": "Prepare two image-review tasks; preserve original relations and user answers."
   },
@@ -781,13 +781,13 @@
   },
   {
     "path": "code/scripts/publication/build_displays.py",
-    "bytes": 11099,
+    "bytes": 10973,
     "group": "Trajectory extraction and evaluation",
     "description": "Generate CAS-sized manuscript figures and tables from archived experiment outputs."
   },
   {
     "path": "code/scripts/publication/build_table.py",
-    "bytes": 3502,
+    "bytes": 3447,
     "group": "Trajectory extraction and evaluation",
     "description": "Generate supplementary residual table from archived per-fit predictions/metrics."
   },
@@ -805,7 +805,7 @@
   },
   {
     "path": "code/scripts/report_field_survey.py",
-    "bytes": 16190,
+    "bytes": 16096,
     "group": "Reporting and manuscript",
     "description": "Summarize the completed all-recording survey without promoting proxies to truth."
   },
@@ -829,7 +829,7 @@
   },
   {
     "path": "code/scripts/report_todd_three_second.py",
-    "bytes": 12140,
+    "bytes": 12041,
     "group": "Reporting and manuscript",
     "description": "Create the experiment report from saved outputs; never choose models or windows."
   },
@@ -901,25 +901,25 @@
   },
   {
     "path": "code/scripts/serve_leader_review.py",
-    "bytes": 253,
+    "bytes": 246,
     "group": "Human review and identity",
     "description": "Compatibility entry point for the SSH-ready review_web/server.py."
   },
   {
     "path": "code/scripts/source_revision.py",
-    "bytes": 1556,
+    "bytes": 1531,
     "group": "Workspace and data administration",
     "description": "Preserve archive baselines and record intentional source revisions."
   },
   {
     "path": "code/scripts/summarize_field_branches.py",
-    "bytes": 15493,
+    "bytes": 15362,
     "group": "Reporting and manuscript",
     "description": "Build the workflow figure, evidence tables, and reproducible branch report."
   },
   {
     "path": "code/scripts/summarize_field_pilot.py",
-    "bytes": 13553,
+    "bytes": 13448,
     "group": "Reporting and manuscript",
     "description": "Build the experiment report and manuscript results from recorded outputs."
   },
@@ -931,7 +931,7 @@
   },
   {
     "path": "code/scripts/Sync-FieldInputs.ps1",
-    "bytes": 2729,
+    "bytes": 2774,
     "group": "Workspace and data administration",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -961,7 +961,7 @@
   },
   {
     "path": "code/scripts/todd_experiment_data.py",
-    "bytes": 10419,
+    "bytes": 10260,
     "group": "Trajectory extraction and evaluation",
     "description": "Build masked Todd SE classifier inputs from frozen reviewed trajectories."
   },
@@ -1069,7 +1069,7 @@
   },
   {
     "path": "code/scripts/workspace_paths.py",
-    "bytes": 2394,
+    "bytes": 2347,
     "group": "Workspace and data administration",
     "description": "Locations for current code and immutable manifests written before layout v2."
   },
@@ -1135,13 +1135,13 @@
   },
   {
     "path": "code/tests/test_release.py",
-    "bytes": 3938,
+    "bytes": 3849,
     "group": "Validation and diagnostics",
     "description": "The publication boundary must exclude private data and restricted dependencies."
   },
   {
     "path": "code/tools/export_repository.py",
-    "bytes": 8856,
+    "bytes": 8576,
     "group": "Trajectory extraction and evaluation",
     "description": "Export an allowlisted source tree for GitHub; never traverse local data/runtime roots."
   },
@@ -1183,7 +1183,7 @@
   },
   {
     "path": "code/trajectory/evaluators/kitti_utils/kitti_common.py",
-    "bytes": 24660,
+    "bytes": 23985,
     "group": "Trajectory extraction and evaluation",
     "description": "Historical research entry; inspect its configuration before execution."
   },
@@ -1357,7 +1357,7 @@
   },
   {
     "path": "code/trajectory/scripts/calibration/dash_cycle_check.py",
-    "bytes": 6207,
+    "bytes": 7308,
     "group": "Validation and diagnostics",
     "description": "Camera scale check from lane-line dashes: no GPS, no timing."
   },
@@ -1366,6 +1366,12 @@
     "bytes": 9369,
     "group": "Detector and geometry adaptation",
     "description": "Camera height (and a small tilt correction) from GPS distances between frames."
+  },
+  {
+    "path": "code/trajectory/scripts/calibration/focal_from_rotation.py",
+    "bytes": 6419,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Focal length of a re-pointed PTZ camera from a reference view of the same camera."
   },
   {
     "path": "code/trajectory/scripts/calibration/lsd_vanishing_point.py",
@@ -1378,6 +1384,12 @@
     "bytes": 2880,
     "group": "Trajectory extraction and evaluation",
     "description": "Write a calibration variant: the clip's VP rotation with a pitch (and roll)"
+  },
+  {
+    "path": "code/trajectory/scripts/calibration/otc3d_2026_pose_compare.py",
+    "bytes": 3257,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Runs on the lab server from the OpenTrafficCam3D root, after pipeline_localization.py with"
   },
   {
     "path": "code/trajectory/scripts/calibration/road_calibrate_single.py",
@@ -1402,6 +1414,12 @@
     "bytes": 28804,
     "group": "Detector and geometry adaptation",
     "description": "Historical research entry; inspect its configuration before execution."
+  },
+  {
+    "path": "code/trajectory/scripts/calibration/roll_fit.py",
+    "bytes": 4156,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Camera roll and height from lane-dash cycles on both carriageways, GPS-free (D26)."
   },
   {
     "path": "code/trajectory/scripts/calibration/run_anycalib_single.py",
@@ -1518,6 +1536,24 @@
     "description": "Evaluation only: how much each pipeline component improves the lab car's trajectory."
   },
   {
+    "path": "code/trajectory/scripts/evaluation/accel_study.py",
+    "bytes": 7457,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Acceleration evaluation (decision D25): skill against always-zero, events, CA smoother."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/accel_zero_reference.py",
+    "bytes": 1988,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Zero-acceleration reference for the acceleration error (2026-11-07)."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/bias_check.py",
+    "bytes": 2280,
+    "group": "Validation and diagnostics",
+    "description": "Per-pass bias versus noise of the GPS car's errors (overnight E2, Bland-Altman style)."
+  },
+  {
     "path": "code/trajectory/scripts/evaluation/box_image_alignment.py",
     "bytes": 7514,
     "group": "Trajectory extraction and evaluation",
@@ -1540,6 +1576,12 @@
     "bytes": 4456,
     "group": "Detector and geometry adaptation",
     "description": "Grade two runs of the same clips against GPS on the image-identified target."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/coverage_window.py",
+    "bytes": 8414,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Fixed coverage denominator for the GPS car (decision D35): the frames it is visible and in range."
   },
   {
     "path": "code/trajectory/scripts/evaluation/dair_yaw_sign_check.py",
@@ -1573,7 +1615,7 @@
   },
   {
     "path": "code/trajectory/scripts/evaluation/gps_to_image.py",
-    "bytes": 12423,
+    "bytes": 12668,
     "group": "Trajectory extraction and evaluation",
     "description": "Evaluation only: put a clip's GPS track into the camera road frame and into pixels."
   },
@@ -1584,16 +1626,82 @@
     "description": "Grade detector runs of one clip against GPS on the image-identified target."
   },
   {
+    "path": "code/trajectory/scripts/evaluation/heldout_eval.py",
+    "bytes": 7754,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Held-out evaluation, one row per pass (decisions D23, D24)."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/hybrid_study.py",
+    "bytes": 4952,
+    "group": "Trajectory extraction and evaluation",
+    "description": "2D and 3D together (decisions D31, D32), retrained head, file clock."
+  },
+  {
     "path": "code/trajectory/scripts/evaluation/label_tracks_on_frame.py",
     "bytes": 1647,
     "group": "Trajectory extraction and evaluation",
     "description": "Draw every track alive at one frame with its ID, so the instrumented car can be"
   },
   {
+    "path": "code/trajectory/scripts/evaluation/lowfilter_study.py",
+    "bytes": 5277,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Low-score box filters (decision D29) on the retrained head (D27)."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/lowscore_precision.py",
+    "bytes": 5617,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Precision of low-score continuation (decision D28): are the weak boxes the tracker used vehicles?"
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/lowscore_sweep.py",
+    "bytes": 7335,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Low-score track continuation sweep (decision D20, ByteTrack-style second pass)."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/new_todd_eval.py",
+    "bytes": 9378,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Evaluation only: the 2026 Todd SE clips against their GPS (plan 2026-11-04, Phase 6)."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/range_dropoff.py",
+    "bytes": 3944,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Where the instrumented car's 3D detections disappear with range (GPS-free)."
+  },
+  {
     "path": "code/trajectory/scripts/evaluation/relative_trajectory.py",
     "bytes": 9028,
     "group": "Trajectory extraction and evaluation",
     "description": "Evaluation only: compare the SHAPE of the lab vehicle's BEV trajectory with its GPS."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/road_mask_2d.py",
+    "bytes": 3613,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Open flag F1: can the road mask come from the 2D detector instead of the 3D detector it filters? (overnight E6)"
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/roll_test.py",
+    "bytes": 4628,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Does the camera roll measured from building edges (+0.7 deg, 2026 pose, GPS-free; D26) remove the"
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/round2_same_frames.py",
+    "bytes": 3384,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Round-2 heads compared on the frames both runs track (D34), so added harder frames do not count against a head."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/round2_study.py",
+    "bytes": 4863,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Round-2 self-training heads (D34) against round 1, graded like D31: file clock, held-out passes."
   },
   {
     "path": "code/trajectory/scripts/evaluation/score_heading.py",
@@ -1609,9 +1717,15 @@
   },
   {
     "path": "code/trajectory/scripts/evaluation/site_error_model.py",
-    "bytes": 17672,
+    "bytes": 17992,
     "group": "Trajectory extraction and evaluation",
     "description": "Site error model: grade camera tracks against GPS with shared physical parameters."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/smoother_retune.py",
+    "bytes": 2496,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Does the RTS smoother's process noise (q_vel 0.1, set for round 1) still suit the round-2 head? (overnight E5)"
   },
   {
     "path": "code/trajectory/scripts/evaluation/svbrd_av_features.py",
@@ -1632,6 +1746,18 @@
     "description": "Self-checks for site_error_model on synthetic data."
   },
   {
+    "path": "code/trajectory/scripts/evaluation/track_consistency.py",
+    "bytes": 4339,
+    "group": "Trajectory extraction and evaluation",
+    "description": "GPS-free frame-to-frame consistency of the 3D tracks, by detection score band (D20 to D22)."
+  },
+  {
+    "path": "code/trajectory/scripts/evaluation/trajectory_quality.py",
+    "bytes": 2919,
+    "group": "Trajectory extraction and evaluation",
+    "description": "GPS-free quality of every extracted trajectory, not only the GPS car (overnight E4)."
+  },
+  {
     "path": "code/trajectory/scripts/evaluation/trial_time_offsets.py",
     "bytes": 8138,
     "group": "Trajectory extraction and evaluation",
@@ -1639,7 +1765,7 @@
   },
   {
     "path": "code/trajectory/scripts/finetune/augcheck.py",
-    "bytes": 3123,
+    "bytes": 3121,
     "group": "Validation and diagnostics",
     "description": "Self-check for train_finetune --augment (server, CUDA)."
   },
@@ -1651,13 +1777,13 @@
   },
   {
     "path": "code/trajectory/scripts/finetune/correct_labels.py",
-    "bytes": 10762,
+    "bytes": 11061,
     "group": "Trajectory extraction and evaluation",
     "description": "Correct pseudo-label positions against the car outlines in the image."
   },
   {
     "path": "code/trajectory/scripts/finetune/eval_finetune.py",
-    "bytes": 3550,
+    "bytes": 3548,
     "group": "Detector and geometry adaptation",
     "description": "Did fine-tuning actually help? Measured on the held-out clip only."
   },
@@ -1669,7 +1795,7 @@
   },
   {
     "path": "code/trajectory/scripts/finetune/make_pseudo_labels.py",
-    "bytes": 10309,
+    "bytes": 11788,
     "group": "Trajectory extraction and evaluation",
     "description": "Turn tracked detections into training labels for fine-tuning."
   },
@@ -1680,14 +1806,20 @@
     "description": "Baseline labels for the self-training ablation: raw detections, no track cleanup."
   },
   {
+    "path": "code/trajectory/scripts/finetune/mark_label_roles.py",
+    "bytes": 4886,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Give every training label a role from image agreement with a 2D detector (decision D34)."
+  },
+  {
     "path": "code/trajectory/scripts/finetune/review_pseudo_labels.py",
-    "bytes": 4172,
+    "bytes": 4281,
     "group": "Human review and identity",
     "description": "Render the pseudo-labels so a human can judge them."
   },
   {
     "path": "code/trajectory/scripts/finetune/train_finetune.py",
-    "bytes": 23003,
+    "bytes": 26356,
     "group": "Detector and geometry adaptation",
     "description": "Fine-tune BEVHeight's detection head on our own pseudo-labelled footage."
   },
@@ -1885,7 +2017,7 @@
   },
   {
     "path": "code/trajectory/scripts/pipeline/extract_trajectories.py",
-    "bytes": 15902,
+    "bytes": 19598,
     "group": "Trajectory extraction and evaluation",
     "description": "One command from a clip's frames to one trajectory file per vehicle."
   },
@@ -1900,6 +2032,12 @@
     "bytes": 3935,
     "group": "Trajectory extraction and evaluation",
     "description": "Mark which extracted vehicle is the instrumented car, from the image only."
+  },
+  {
+    "path": "code/trajectory/scripts/pipeline/mark_instrumented_manual.py",
+    "bytes": 3211,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Mark the instrumented vehicle from hand-picked image positions (rear-view clips)."
   },
   {
     "path": "code/trajectory/scripts/pipeline/trajectory_features.py",
@@ -1938,6 +2076,12 @@
     "description": "Trajectory accuracy vs the GPS ground truth: position RMSE and heading error."
   },
   {
+    "path": "code/trajectory/scripts/reporting/match2d.py",
+    "bytes": 2648,
+    "group": "Trajectory extraction and evaluation",
+    "description": "One-to-one matching of every label in a frame to 2D detections, by image overlap."
+  },
+  {
     "path": "code/trajectory/scripts/reporting/render_boxes_video.py",
     "bytes": 2474,
     "group": "Trajectory extraction and evaluation",
@@ -1956,10 +2100,34 @@
     "description": "Two-panel mp4 that shows heading accuracy by colour, not by eye."
   },
   {
+    "path": "code/trajectory/scripts/reporting/render_conflicts_2d_match.py",
+    "bytes": 2336,
+    "group": "Trajectory extraction and evaluation",
+    "description": "The 21 conflict scenes again, now decided by 2D matching. Yellow: 2D detections."
+  },
+  {
     "path": "code/trajectory/scripts/reporting/render_height_distances.py",
     "bytes": 3629,
     "group": "Detector and geometry adaptation",
     "description": "Annotate the camera-vs-GPS distance for each step of the instrumented car."
+  },
+  {
+    "path": "code/trajectory/scripts/reporting/render_label_near_pairs.py",
+    "bytes": 1600,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Crop every label pair with centres under 3 m from the review renders, one tile per pair."
+  },
+  {
+    "path": "code/trajectory/scripts/reporting/render_label_roles.py",
+    "bytes": 2862,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Final training labels with their roles (D34), as a video per clip and one still sheet."
+  },
+  {
+    "path": "code/trajectory/scripts/reporting/render_masks_in_use.py",
+    "bytes": 2094,
+    "group": "Trajectory extraction and evaluation",
+    "description": "The two road masks the pipeline uses, one row per camera pose."
   },
   {
     "path": "code/trajectory/scripts/reporting/render_refined_compare.py",
@@ -1972,6 +2140,24 @@
     "bytes": 3023,
     "group": "Trajectory extraction and evaluation",
     "description": "Check video for road_mask.py: what the mask keeps and what it drops."
+  },
+  {
+    "path": "code/trajectory/scripts/reporting/render_round_compare.py",
+    "bytes": 1501,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Side-by-side tracks of two runs on one clip (made by render_trajectories.py), with titles."
+  },
+  {
+    "path": "code/trajectory/scripts/reporting/render_round_compare_counted.py",
+    "bytes": 4451,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Round 1 vs round 2 side by side, with the frames each side is credited for marked."
+  },
+  {
+    "path": "code/trajectory/scripts/reporting/render_score_levels.py",
+    "bytes": 3164,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Raw 3D detections at several score cut-offs, pretrained (top row) and fine-tuned (bottom row)."
   },
   {
     "path": "code/trajectory/scripts/reporting/render_sign_from_motion.py",
@@ -1987,7 +2173,7 @@
   },
   {
     "path": "code/trajectory/scripts/reporting/render_trajectories.py",
-    "bytes": 3487,
+    "bytes": 3825,
     "group": "Trajectory extraction and evaluation",
     "description": "Draw the final extracted trajectories (extract_trajectories.py output) on the"
   },
@@ -1996,6 +2182,12 @@
     "bytes": 2502,
     "group": "Trajectory extraction and evaluation",
     "description": "Side-by-side video of two detection runs' raw boxes on the same clip."
+  },
+  {
+    "path": "code/trajectory/scripts/reporting/render_untracked_conflicts.py",
+    "bytes": 4621,
+    "group": "Trajectory extraction and evaluation",
+    "description": "Scenes where a single-frame (untracked) label sits within 3 m of another label."
   },
   {
     "path": "code/trajectory/scripts/test_grad.py",
@@ -2035,7 +2227,7 @@
   },
   {
     "path": "code/trajectory/scripts/tracking/match_marker_template.py",
-    "bytes": 5866,
+    "bytes": 6073,
     "group": "Trajectory extraction and evaluation",
     "description": "Tier-1b target-vehicle ID: multi-scale template matching of the lab hood marker."
   },
@@ -2053,7 +2245,7 @@
   },
   {
     "path": "code/trajectory/scripts/tracking/postprocess_tracks.py",
-    "bytes": 17023,
+    "bytes": 19098,
     "group": "Trajectory extraction and evaluation",
     "description": "Clean AB3DMOT tracks: drop coasted tails, then RTS-smooth position and speed."
   },
@@ -2071,7 +2263,7 @@
   },
   {
     "path": "code/trajectory/scripts/tracking/run_ab3dmot.py",
-    "bytes": 11371,
+    "bytes": 13198,
     "group": "Trajectory extraction and evaluation",
     "description": "Run AB3DMOT on BEVHeight per-frame detections to get ID-linked vehicle trajectories."
   },
@@ -2089,7 +2281,7 @@
   },
   {
     "path": "code/trajectory/scripts/tracking/test_run_ab3dmot.py",
-    "bytes": 3457,
+    "bytes": 4574,
     "group": "Validation and diagnostics",
     "description": "Self-check for the two-stage (ByteTrack-style) association."
   },

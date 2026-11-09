@@ -17,7 +17,7 @@ T.FEAT_MASK = True; T.LABELS = "std_labels"
 dev = "cuda"
 model = T.build_model(); T.load_checkpoint(model, T.CKPT_PATH); model.to(dev).eval()
 K, l2c = T.clip_paths("HV_T_EW_1")
-img, mats, _, _ = T.load_sample("HV_T_EW_1", 238, K, l2c)
+img, mats, *_ = T.load_sample("HV_T_EW_1", 238, K, l2c)
 
 def dets(img, mats):
     i, m = T.to_device(img, mats, dev)

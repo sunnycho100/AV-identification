@@ -114,12 +114,18 @@ def load_gps(csv_path, lat0, lon0):
     # The lab's frame times use each clip's true frame rate (30, 31 or 29.97 fps);
     # recover it from the CSV instead of assuming 30.
     fr = [(int(r["nearest_frame_index"]), float(r["nearest_frame_time_sec"]))
-          for r in rows if r["nearest_frame_index"] and int(r["nearest_frame_index"]) > 0]
+          for r in rows if r.get("nearest_frame_index") and r.get("nearest_frame_time_sec")
+          and int(r["nearest_frame_index"]) > 0]
     fps = float(np.median([i / t for i, t in fr])) if fr else FPS
-    # processed_heading_y is the SOUTH component; negate to make the frame right-handed
+    if "processed_heading_x" in rows[0]:
+        # processed_heading_y is the SOUTH component; negate to make the frame right-handed
+        hx, hn = col("processed_heading_x"), -col("processed_heading_y")
+    else:
+        # 2026 logs carry no attitude columns: heading from the velocity direction
+        # (fine on a freeway, undefined for a stopped car)
+        hx, hn = col("east_velocity"), col("north_velocity")
     return {"t": col("video_time_sec"), "e": e, "n": n, "fps": fps,
-            "hx": col("processed_heading_x"), "hn": -col("processed_heading_y"),
-            "v": np.hypot(col("east_velocity"), col("north_velocity"))}
+            "hx": hx, "hn": hn, "v": np.hypot(col("east_velocity"), col("north_velocity"))}
 
 
 def gps_at(gps, t):

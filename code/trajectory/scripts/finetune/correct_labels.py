@@ -127,11 +127,14 @@ def one_to_one(labels, img, bg, K, M):
 def main():
     ap = argparse.ArgumentParser("Correct pseudo-label positions from the image")
     ap.add_argument("--clip", required=True)
+    ap.add_argument("--run", default="phase1", help="detection run whose calibration the labels are in")
+    ap.add_argument("--src", default="pseudo_labels", help="input label set under outputs/finetune/")
+    ap.add_argument("--dst", default="pseudo_labels_v2", help="output label set under outputs/finetune/")
     a = ap.parse_args()
-    src = ROOT / "outputs/finetune/pseudo_labels" / a.clip
-    dst = ROOT / "outputs/finetune/pseudo_labels_v2" / a.clip
+    src = ROOT / "outputs/finetune" / a.src / a.clip
+    dst = ROOT / "outputs/finetune" / a.dst / a.clip
     dst.mkdir(parents=True, exist_ok=True)
-    cal = json.loads((ROOT / "outputs/object_detection/camera-data" / f"{a.clip}_phase1"
+    cal = json.loads((ROOT / "outputs/object_detection/camera-data" / f"{a.clip}_{a.run}"
                       / "calibration_used.json").read_text())
     K, M = np.array(cal["K"]), np.array(cal["lidar2cam"])
     z = cal.get("road_plane_z_in_output", -1.73)
