@@ -87,9 +87,11 @@ def main():
     ap = argparse.ArgumentParser(description="find the lab marker car in a front-view clip")
     ap.add_argument("--frames-dir", required=True)
     ap.add_argument("--out-dir", required=True)
+    ap.add_argument("--template", default=None,
+                    help="marker crop to match instead of the README figure (e.g. the 2026 red car's marker)")
     args = ap.parse_args()
 
-    tpl = build_template()
+    tpl = cv2.imread(args.template) if args.template else build_template()
     per_frame = match_frames(args.frames_dir, tpl)
     runs = coherent_runs(per_frame)
 
