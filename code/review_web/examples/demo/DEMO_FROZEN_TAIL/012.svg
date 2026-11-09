@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+<rect width="960" height="540" fill="#e5ebe7"/><rect y="140" width="960" height="250" fill="#596566"/>
+<path d="M0 320H960" stroke="#f1e9cb" stroke-width="4" stroke-dasharray="35 25"/>
+<rect x="224" y="220" width="85" height="50" rx="8" fill="#efb856"/><rect x="244" y="227" width="30" height="36" rx="3" fill="#42626b"/>
+<text x="30" y="65" font-family="sans-serif" font-size="26" fill="#253e3c">SYNTHETIC DEMO / NOT RESEARCH DATA</text>
+<text x="30" y="465" font-family="sans-serif" font-size="22" fill="#253e3c">Frozen after frame 40 · frame 12</text></svg>

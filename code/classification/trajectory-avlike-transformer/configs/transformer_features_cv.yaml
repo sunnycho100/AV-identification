@@ -1,0 +1,71 @@
+data:
+  raw_dir: "converted data"
+  processed_csv: "data/processed/trajectory_features_improved.csv"
+  label_col: "label"
+  trajectory_id_col: "Trajectory_ID"
+  time_col: "Time_Index"
+
+features:
+  sampling_rate: 10
+  dt: 0.1
+  seq_len: 40
+  stride: 10
+  eps: 1.0e-6
+  ttc_cap: 30.0
+  thw_cap: 10.0
+  smooth: true
+  smooth_window: 5
+  use_actual_dt: true
+  clip_quantiles: [0.005, 0.995]
+  feature_cols:
+    - v_FV_long
+    - a_FV
+    - jerk_FV
+    - v_LV_long
+    - a_LV
+    - gap
+    - lateral_offset
+    - closing_speed
+    - delta_acc
+    - THW
+    - TTC
+
+model:
+  input_dim: 11
+  d_model: 128
+  num_layers: 2
+  num_heads: 4
+  ffn_dim: 512
+  dropout: 0.1
+  seq_len: 40
+
+training:
+  batch_size: 128
+  epochs: 50
+  lr: 0.0003
+  weight_decay: 0.0001
+  early_stopping_patience: 10
+  use_pos_weight: true
+  seed: 42
+
+split:
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  split_by: "Trajectory_ID"
+
+cross_validation:
+  validation_ratio: 0.20
+  folds:
+    - name: part2
+      test_sources: [AV_JRC-VC_260219_part2, HV_JRC-VC_280219_part2]
+    - name: part3
+      test_sources: [AV_JRC-VC_260219_part3, HV_JRC-VC_280219_part3]
+    - name: highway
+      test_sources: [AV_JRC-VC_260219_part4_highway, HV_JRC-VC_280219_part4_highway]
+
+output:
+  checkpoint_dir: "artifacts/checkpoints/features_cv"
+  log_dir: "artifacts/logs/features_cv"
+  figure_dir: "artifacts/figures/features_cv"
+  feature_stats_path: "artifacts/logs/features_cv/feature_stats.json"

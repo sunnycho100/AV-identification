@@ -1,0 +1,9 @@
+# Install a PyTorch 2.6.0 build appropriate for the server separately.
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.15.3
+scikit-learn==1.7.2
+joblib==1.5.2
+# These support the original project scripts; current frozen training needs the above.
+matplotlib>=3.5,<4
+PyYAML>=6,<7

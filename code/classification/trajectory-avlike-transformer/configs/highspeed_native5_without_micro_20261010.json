@@ -1,0 +1,44 @@
+{
+  "prepared": "data/prepared_highspeed_native5_20261010",
+  "output": "artifacts/experiments/20261010_native5_without_micro",
+  "seeds": [
+    42
+  ],
+  "folds": [
+    0,
+    1,
+    2
+  ],
+  "variants": [
+    "ssl_external"
+  ],
+  "threads": 4,
+  "train_stride": 40,
+  "epochs": 40,
+  "patience": 8,
+  "batch_size": 128,
+  "lr": 0.0003,
+  "weight_decay": 0.01,
+  "label_smoothing": 0.05,
+  "pretrain_lr": 0.0003,
+  "pretrain_epochs": 20,
+  "model": {
+    "architecture": "transformer",
+    "input_dim": 11,
+    "d_model": 128,
+    "num_layers": 2,
+    "num_heads": 4,
+    "ffn_dim": 512,
+    "seq_len": 20,
+    "dropout": 0.2
+  },
+  "tree": {
+    "max_iter": 100,
+    "max_leaf_nodes": 7,
+    "min_samples_leaf": 30,
+    "l2_regularization": 10.0,
+    "learning_rate": 0.05,
+    "early_stopping": false
+  },
+  "include_microsim": false
+}

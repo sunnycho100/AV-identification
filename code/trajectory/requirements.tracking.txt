@@ -1,0 +1,10 @@
+# CPU tracker / postprocessing dependencies for Python 3.10.
+# Detector and calibration dependencies are handled separately in SERVER_SETUP.txt.
+numpy==1.26.4
+scipy==1.11.4
+numba==0.60.0
+llvmlite==0.43.0
+filterpy==1.4.5
+opencv-python-headless==4.10.0.84
+matplotlib==3.8.4
+Pillow==10.4.0

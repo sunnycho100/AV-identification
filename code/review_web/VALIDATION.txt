@@ -1,0 +1,5 @@
+2.1-no-leader: PASS
+6 backend regression tests, including explicit absence, invisible leader and legacy records.
+25 browser UI checks, including absence save/export/import, preserved ego selection, and display of the 43 applied user reviews.
+Tests use isolated data and browser storage; no real user annotation is fabricated.
+Run: python -S tests/test_ssh_review.py

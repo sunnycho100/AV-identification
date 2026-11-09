@@ -1,0 +1,48 @@
+{
+  "name": "multisegment_frozen_fusion_20261017",
+  "prepared": "../../data/prepared_highspeed_20261010",
+  "include_ngsim": false,
+  "device": "cuda",
+  "threads": 4,
+  "seeds": [
+    42,
+    52,
+    62,
+    72,
+    82
+  ],
+  "folds": [
+    0,
+    1,
+    2
+  ],
+  "train_stride": 40,
+  "features": "legacy11",
+  "smoothing": 7,
+  "architecture": "multiscale_cnn",
+  "width": 32,
+  "layers": 1,
+  "dropout": 0.2,
+  "data_mode": "expanded",
+  "external_mass": 0.5,
+  "class_balanced_loss": true,
+  "epochs": 60,
+  "patience": 12,
+  "batch_size": 16,
+  "lr": 0.0001,
+  "weight_decay": 0.01,
+  "label_smoothing": 0.05,
+  "selection": "bce",
+  "pretrain": "none",
+  "pretrain_lr": 0.0003,
+  "pretrain_epochs": 30,
+  "augment": false,
+  "evaluate_test": true,
+  "study": "multisegment",
+  "mode": "frozen",
+  "original_models": {
+    "cnn": "../../artifacts/experiments/20261010_refinement/runs/final_cnn_expanded",
+    "transformer": "../../artifacts/experiments/20261010_refinement/runs/final_transformer_expanded",
+    "rf": "../../artifacts/experiments/20261011_native11/runs/native11_rf_expanded"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "identification-environments/v1",
+  "default": "bev",
+  "environments": {
+    "bev": {
+      "python": ".venv-bev/Scripts/python.exe",
+      "torch": "1.13.0+cu117",
+      "purpose": "BEVHeight CUDA inference, MOT, AnyCalib, trajectory recovery, three-second Transformer training and validation"
+    },
+    "classifier": {
+      "python": ".venv-classifier/Scripts/python.exe",
+      "torch": "2.6.0+cpu",
+      "purpose": "Frozen default classification, maintained CPU package/tests, historical classifier checkpoints and data analysis"
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "trajectory-review-project/v1",
+  "id": "synthetic_demo",
+  "title": "合成演示 · 区间与自车审核",
+  "description": "随源码发布的合成数据。可独立运行，无需模型、视频或 GPU。",
+  "required_duration_s": 3,
+  "media_root": ".",
+  "demo": true,
+  "cases": [
+    {
+      "clip": "DEMO_CONTINUOUS",
+      "title": "DEMO_CONTINUOUS",
+      "note": "合成演示，不属于研究样本。可练习选三秒区间、画框和冻结尾段标记。",
+      "current_extracted_duration_s": null,
+      "frames": 51,
+      "duration_s": 5,
+      "checkpoints": [
+        0,
+        15,
+        30,
+        40,
+        50
+      ],
+      "video": null,
+      "frames_template": "DEMO_CONTINUOUS/{frame:03d}.svg",
+      "frame_data": "DEMO_CONTINUOUS.json",
+      "source_video_sha256": "a68dde3e858e1db3e1dc20aac9a5c1fa23f772e4a1e33d97a4523eb16f97280e",
+      "frame_data_sha256": "98d1f9f9535dc3f09cd01df07780160954558283158605e4f4d2ecabe0f3dbe8"
+    },
+    {
+      "clip": "DEMO_FROZEN_TAIL",
+      "title": "DEMO_FROZEN_TAIL",
+      "note": "合成演示，不属于研究样本。可练习选三秒区间、画框和冻结尾段标记。",
+      "current_extracted_duration_s": null,
+      "frames": 51,
+      "duration_s": 5,
+      "checkpoints": [
+        0,
+        15,
+        30,
+        40,
+        50
+      ],
+      "video": null,
+      "frames_template": "DEMO_FROZEN_TAIL/{frame:03d}.svg",
+      "frame_data": "DEMO_FROZEN_TAIL.json",
+      "source_video_sha256": "55347662e023d31974ed6af8fcc6cb57e79860e51ba50dff5217b33a6adec0fc",
+      "frame_data_sha256": "7bdfaf7dfb797394ccb023bc0007594acda2fabbcc2c32ff910b720c084cb079"
+    }
+  ]
+}

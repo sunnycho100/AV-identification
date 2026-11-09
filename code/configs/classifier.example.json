@@ -1,0 +1,11 @@
+{
+  "name": "frozen_source_transformer",
+  "checkpoint": "weights/source_transformer.pt",
+  "feature_stats": "weights/feature_stats.json",
+  "threshold": 0.5,
+  "target_classifier_training": false,
+  "default_dataset": "outputs/demo/dataset.npz",
+  "default_metadata": "outputs/demo/windows.csv",
+  "output": "outputs/demo_predictions",
+  "note": "Supply a trusted compatible project checkpoint. The generated demo has no class labels and does not measure accuracy. Set checkpoint_sha256 to the published digest when distributing weights."
+}

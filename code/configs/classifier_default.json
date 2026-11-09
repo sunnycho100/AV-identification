@@ -1,0 +1,25 @@
+{
+  "name": "frozen_source_transformer",
+  "checkpoint": "classification/trajectory-avlike-transformer/artifacts/experiments/20261010_refinement/runs/final_transformer_expanded/seed_42/part2/best_bce.pt",
+  "checkpoint_sha256": "ff37225531e01a04dd0643b50b9569c7b4c2578279fb48689ec8b07e40be6dd6",
+  "threshold": 0.5,
+  "target_classifier_training": false,
+  "normalization": "Fixed source mean/std; no clipping, matching the existing frozen field reference. Missing features are zero after normalization. No learned missingness projection is added.",
+  "time": "Real 10 Hz sampling; slice source positional embeddings and mask right-padding. No time stretching or invented observations.",
+  "default_dataset": "experiments/field_todd_variable_20261103/dataset.npz",
+  "default_metadata": "experiments/field_todd_variable_20261103/windows.csv",
+  "output": "experiments/frozen_transfer_20261103",
+  "selection_history": "Chosen as the current operational default after inspecting Todd development results. Source weights and threshold are unchanged; this is not a prospectively selected independent zero-shot benchmark.",
+  "scope": "Source-only AV/HV classifier transfer; upstream camera/trajectory processing uses target-domain adaptation and human review. Earlier Todd classifier fine-tuning is retained as a separate comparison.",
+  "sensitivity": {
+    "public_samples": [21, 26, 40],
+    "field_samples": [21, 26],
+    "placements": ["center", "prefix", "suffix"],
+    "primary_placement": "center",
+    "public_cohort": "Original fixed checkpoint's Vicolungo part2 test sources only; greedily keep disjoint original 40-point windows within each pair, ordered by time. Use the identical eligible cohort at every duration.",
+    "public_features": "Recompute smoothing and derivatives after cropping raw measurements. Complete leader data. Primary deployment preprocessing is no clipping; archived clipped inference is checked only to verify restoration.",
+    "public_metric": "Mean accuracy within each record-local pair, then within each source, then across sources. Also report window accuracy and class recalls.",
+    "field_cohort": "Only current windows with at least 26 genuine samples; no extension or changed trajectory. One crop per video at each duration. Report the full 13-video default separately.",
+    "interpretation": "Post-hoc duration diagnostic of fixed pretrained weights, not a comparison of training lengths or independent deployment generalization. No duration or placement is selected by accuracy."
+  }
+}

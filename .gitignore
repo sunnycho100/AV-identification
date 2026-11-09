@@ -1,74 +1,81 @@
-# Model checkpoints
-*.ckpt
-*.pth
-*.pt
-checkpoints/
-
-# Python
+# Source belongs in Git; recordings, environments and computed artifacts do not.
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
-build/
-.eggs/
-
-# Virtual environments
-.venv/
-.venv*/
-.venv-*/
-venv/
-env/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
+*.dist-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .DS_Store
 Thumbs.db
-
-# Datasets (raw sources, symlinks, conversions, large splits)
-# All raw datasets now live under V2X-Raw-Datasets/ (incl. single-infrastructure-side[-image])
-V2X-Raw-Datasets/
-data/dair-v2x-*
-data/v2x-*-split*.json
-*.pkl
-
-# Delivered datasets — kept local, never committed.
-# Camera data/: WI-DOT Beltline clips + the per-clip GPS trajectory CSVs that are
-# held-out evaluation ground truth (see CLAUDE.md). AV-HV trajectory data/: OpenACC
-# (JRC) car-following CSVs. data/camera-data/: frames re-derivable from the clips
-# via ffmpeg, so there is nothing to gain by versioning them.
-Camera data/
-AV-HV trajectory data/
-data/camera-data/
-# Box download from the lab (raw 10-min recordings, task doc, references): local only.
-data/roadside_box/
-
-# Outputs & logs
-outputs/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.venv*/
+.runtime/
+node_modules/
+build/
+dist/
+/archive/
+/.vscode/
+/code/.vscode/
+/*reviews*.json
+/*decisions*.json
+/code/data/
+/code/outputs/
+/code/experiments/
+/code/catalogs/
+/code/configs/*local*.json
+/code/configs/*.json
+!/code/configs/classifier_default.json
+!/code/configs/classifier.example.json
+!/code/configs/workspace.json
+!/code/configs/environments.json
+!/code/configs/field_todd_complete.json
+!/code/configs/field_todd_3s.json
+!/code/configs/field_todd_variable.json
+/code/trajectory/Camera data/
+/code/trajectory/data/
+/code/trajectory/outputs/
+/code/trajectory/checkpoints/
+/code/trajectory/third_party/AB3DMOT/
+/code/classification/trajectory-avlike-transformer/artifacts/
+/code/classification/trajectory-avlike-transformer/paper_results/
+/code/classification/trajectory-avlike-transformer/data_records/
+/code/classification/trajectory-avlike-transformer/data/*/
+/code/docs/migration/
+/code/docs/classification_migration/
+/code/docs/history/
+/code/docs/PROJECT_HISTORY.md
+/code/review_web/.test-runtime/
+/code/review_web/examples/demo/reviews/
+/paper/
+*.aux
 *.log
-
-# Vendored / archived research clones (not committed)
-third_party/
-archive/
-
-# Stray CI config (auto-generated, unrelated to this project)
-.github/java-upgrade/
-
-# Internal notes & shared artifacts (summary/ folded into personal-documents/ on 2026-06-23)
-personal-documents/
-toshare/
-
-# Local agent instructions
-CLAUDE.md
-
-# Reference papers (PDFs kept locally, not committed)
-*.pdf
-data/svbrd/
-docs/superpowers/
+*.blg
+*.out
+*.synctex.gz
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.npz
+*.npy
+*.pkl
+*.pickle
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.zip
+*.7z
+*.tar
+*.gz
+*.dll
+*.pyd
+*.so
+*.exe

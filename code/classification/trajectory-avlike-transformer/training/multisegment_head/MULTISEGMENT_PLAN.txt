@@ -1,0 +1,73 @@
+2026-10-17: ideal-matched multiple four-second observations of one follower
+
+User explicitly expands the observation budget from one short track to multiple
+same-vehicle tracks. Retain native11 features, >50mph filter, no NGSIM, original
+core/expanded source splits and train-only scalers. No cross-camera association
+implementation or true multiview sensor validation is claimed.
+
+Identity and state: group only within Trajectory_ID, a continuous valid interval
+of one source-local leader/follower pair and unchanged ACC/HV label. Do not treat
+vehicle model names as unique identities, or merge vehicles/dates/labels. Labels
+denote driving mode, not permanent vehicle capability. Same vehicles may recur
+across original source folds; this remains source transfer, not unseen-vehicle CV.
+
+Frozen data construction, before inspecting new aggregate predictions:
+- Start with existing nonoverlapping windows at start_in_segment %40 ==0.
+- Primary 'gap4': greedily take starts >=8s apart (4s observed plus >=4s unseen),
+  then partition each continuous interval into disjoint groups of exactly8views.
+- Paired 'dense': from each primary group's same starting time/interval, take the
+  first8 available starts >=4s apart. Thus exactly the same groups/vehicles/labels
+  as gap4, with a denser observed period. Quality filtering may leave extra gaps.
+- Sensitivity 'gap12': same grouping at >=16s start spacing; separate cohort.
+- All views retain40samples and independent window-local preprocessing. Never
+  concatenate discontinuous snippets and differentiate across camera gaps.
+- K=1,2,4,8 use the SAME eight-view cohorts for a regime; average metrics over
+  ALL choose(8,K) subsets per group. These are repeated choices, not independent
+  vehicles. K=1 is the matched-cohort single-view baseline, not the old global63%.
+  Total observed budget is4K seconds; report actual elapsed spans separately.
+
+Primary frozen experiment: CNN/expanded selected previously by validation; retain
+Transformer/expanded and RF/expanded as controls. Five original model seeds and
+all3sourcefolds. Use saved, previously audited val/test logits with hash checks.
+Prespecified fusion: arithmetic mean probability (primary), mean logit, majority
+vote (ties predictACC at .5). Threshold fixed. No tuning on aggregate test scores.
+Use raw probabilities; temperature variations are not an additional search here.
+
+Primary metric: accuracy, first averaged over subset choices and groups WITHIN
+source-local follower pair, then equally over pairs within each held-out road
+group, then equally over3roadgroups, then over5modelseeds. Also report balanced
+accuracy, BCE, both recalls, ordinary group-weighted accuracy, and each source.
+This weighting and long-interval eligibility differ from previous window metrics.
+Uncertainty: model-seed SD plus paired record-follower bootstrap conditional on
+these sources. Only24 possible source-local follower records; platoon interactions
+and repeated vehicles across sources mean bootstrap is exploratory, not a new-day
+or independent-vehicle generalization interval. Report actual eligible units.
+
+Association robustness diagnostic: on gap4 K8 mean-probability fusion, replace
+non-anchor views independently with probability0,.1,.25,.5 by a window from a
+different pair in the same held-out roadgroup, without conditioning on label.
+Keep anchor and true label; use20fixed draws. This tests synthetic misassociation,
+not estimates of real re-identification error. No relabeling or training on donors.
+
+Two learned-pooling children, specified before frozen aggregate results:
+- CNN mean-embedding pooling with only the original classifier trainable.
+- Same pooling, jointly fine-tune encoder and classifier.
+Initialize each from its matching original CNN/expanded checkpoint; retain all11
+input channels and its scaler. Train only allowed core+external+aux gap4 groups.
+Variable K drawn uniformly from1,2,4,8 per minibatch; choose distinct views.
+Use class-balanced and core/external-balanced bag sampling, then campaign/source/
+record-follower equal weights within each class and side. Smooth labels.05.
+AdamW lr1e-4, weight_decay.01, batch16groups, max60epochs, patience12, gradclip1.
+Five seeds42/52/62/72/82, threefolds:15fits per variant. Selection criterion is
+mean raw validation BCE across all four K using record-follower weighting.
+Include epoch0. Readout is permutation invariant; no camera ID/time metadata input.
+Evaluate selected weights at all K and all regimes. Different training weighting
+and validation aggregation are explicit; do not claim a pure extra-view effect
+from comparing trained variants. The within-model K comparison isolates views.
+
+Audit all group membership/time/nonoverlap/label/source constraints; exact K1
+consistency, fusion arithmetic, input permutation invariance, source isolation,
+train-only scaler, hash-checked original logits and new weight replay. Preserve
+all existing checkpoints/deployment choices. Archive plan, code, memberships,
+per-group metrics, histories and fixed-orx-command run evidence. No automatic
+promotion based on already inspected test sources.

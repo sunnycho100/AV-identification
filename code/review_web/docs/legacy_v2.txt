@@ -1,0 +1,71 @@
+前车审核网页开发包 — VS Code Remote SSH
+版本：2.1-no-leader
+
+审核结论现在明确区分：
+- 有前车：选择自车和直接前车，leader_state=present。
+- 无前车：确认该区间内自车没有直接前车，只需选自车；leader_state=absent、leader=null。
+- 前车暂时不可见：出画或遮挡；leader_state=not_visible、leader=null。
+- 无法判断：leader_state=unknown。
+同一视频可按不同时间区间记录以上状态。前车为空不表示速度或间距为零，自车身份和区间仍保留。
+旧标注继续兼容，不会将旧的“前车不可见”自动转换为“无前车”。刷新网页即可看到新增选项。
+
+最方便的使用方式（视频仍在远程电脑）：
+
+1. 在 VS Code 中通过 Remote SSH 打开 HangZhou 或 identification 文件夹。
+2. 远程服务已启动时，直接做第 3 步。
+   要重新启动，按 Ctrl+Shift+P -> Tasks: Run Task，选择：
+   identification: start review server (SSH)
+   也可在远程 PowerShell 终端、identification 目录下运行：
+   .\.venv-bev\Scripts\python.exe .\review_web\server.py --port 8765
+3. 打开 VS Code 底部“端口 / Ports”面板，点击“转发端口 / Forward a Port”，输入 8765。
+   找不到该面板时，Ctrl+Shift+P 搜索 Ports: Focus on Ports View。
+4. 点击该端口旁“在浏览器中打开 / Open in Browser”。这是你自己电脑的浏览器。
+   服务根地址会自动进入审核页；不需要手工输入很长的页面路径。
+   通常是 http://localhost:8765/；若本地端口已占用，使用 Ports 面板显示的实际地址。
+5. 每段保存审核后，点击“保存到工作区”。结果写回远程 identification 下：
+   experiments/field_leader_review_20261102/user_decisions/
+   不需要先下载视频，再把标注传回去。
+
+重要区分：VS Code 的远程终端运行在远程电脑，浏览器里的 localhost 指你自己的电脑。
+必须先转发端口，再打开浏览器。服务只监听远程 127.0.0.1；通过既有 SSH 连接访问即可。
+当前机器上已有 Python 环境，启动服务不需要安装 Node、npm 或模型依赖。
+
+不用 VS Code 自动转发时：在你自己的电脑终端运行（替换 SSH_HOST）：
+ssh -N -L 18765:127.0.0.1:8765 SSH_HOST
+然后在自己的浏览器打开 http://localhost:18765/。
+SSH_HOST 可以是你原来连接这台机器的 SSH 配置别名；保留原来的跳板机/端口配置。
+
+开发包内容：
+server.py             Python 3.10+ 标准库服务，无第三方依赖
+public/index.html     页面结构
+public/app.js         选车、逐帧、拖框、区间审核、导入导出、保存
+public/style.css      页面样式
+START.ps1             Windows 前台启动，不在远程机器弹出浏览器
+.vscode/              单独打开 review_web 目录时的任务和端口设置
+tests/                转发端口、保存接口、视频 Range 和路径限制的回归测试
+
+这是源码开发包，不包含全部视频/帧和实验数据。
+当前服务器已经具备数据；源码默认放在 identification/review_web 下即可。
+若将源码解压到其他位置，请指向现有的数据工作区：
+python server.py --workspace "C:\...\identification" --port 8765
+这不会把视频或标注复制到开发包内。
+
+服务读取已有目录：
+experiments/field_leader_review_20261102/manifest.json、manifest.js、data/*.js
+trajectory/data/camera-data/<视频>/frames_all/ 与 frame_times.json
+trajectory/outputs/trajectories/<视频_模型>/tracks.json
+data/field/ 下的源视频
+
+已适配：
+- localhost、127.0.0.1、IPv6 回环地址，以及本地/远程端口不同的 SSH 转发。
+- 保存接口使用浏览器同源地址校验，不再要求浏览器端口等于远程监听端口。
+- 视频支持 HTTP Range，拖动播放时只取需要的字节片段。
+- 根地址自动跳转；旧 scripts/serve_leader_review.py 启动方式继续有效。
+- 保存时校验帧区间、源文件版本和车辆选择；每次生成新文件，不覆盖历史标注。
+
+编辑 public/ 下的文件后刷新浏览器即可；后端代码变更后重启服务。
+直接打开旧实验目录的 index.html 仍可导出 JSON；SSH 使用时优先通过转发的 HTTP 地址访问。
+若通过另一个端口访问后看不到浏览器草稿，可从原地址导出再导入；已保存到远程磁盘的结果不受影响。
+
+官方端口转发说明：
+https://code.visualstudio.com/docs/remote/ssh#_forwarding-a-port-creating-ssh-tunnel

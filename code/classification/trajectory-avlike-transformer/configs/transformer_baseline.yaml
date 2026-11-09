@@ -1,0 +1,46 @@
+data:
+  raw_dir: "converted data"
+  processed_csv: "data/processed/trajectory_features.csv"
+  label_col: "label"
+  trajectory_id_col: "Trajectory_ID"
+  time_col: "Time_Index"
+
+features:
+  sampling_rate: 10
+  dt: 0.1
+  seq_len: 40
+  stride: 10
+  eps: 1.0e-6
+  ttc_cap: 30.0
+  thw_cap: 10.0
+  smooth: false
+
+model:
+  input_dim: 12
+  d_model: 128
+  num_layers: 2
+  num_heads: 4
+  ffn_dim: 512
+  dropout: 0.1
+  seq_len: 40
+
+training:
+  batch_size: 128
+  epochs: 50
+  lr: 0.0003
+  weight_decay: 0.0001
+  early_stopping_patience: 10
+  use_pos_weight: true
+  seed: 42
+
+split:
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  split_by: "Trajectory_ID"
+
+output:
+  checkpoint_dir: "artifacts/checkpoints"
+  log_dir: "artifacts/logs"
+  figure_dir: "artifacts/figures"
+  feature_stats_path: "artifacts/feature_stats.json"

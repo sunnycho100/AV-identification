@@ -1,0 +1,10 @@
+{
+  "files.encoding": "utf8",
+  "remote.portsAttributes": {
+    "8765": {
+      "label": "路侧轨迹审阅",
+      "onAutoForward": "notify"
+    }
+  },
+  "remote.restoreForwardedPorts": true
+}

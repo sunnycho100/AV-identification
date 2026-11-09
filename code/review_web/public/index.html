@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>前车核对 · 路测轨迹</title><link rel="stylesheet" href="style.css"></head>
+<body><nav style="padding:10px 24px;background:#173d3b;color:#fff;font:14px Segoe UI,sans-serif"><a href="/app/" style="color:#fff">← 路侧轨迹审阅 · 项目首页</a><span style="margin-left:20px">原有前车审核 · 历史记录保留</span></nav>
+<header><div><span class="eyebrow">FIELD TRAJECTORY REVIEW</span><h1>一起确认前车</h1></div><div class="headerRight"><span id="progress"></span><button id="saveWorkspace" class="primary">保存到工作区</button><button id="export">导出审核结果</button><label class="button">导入结果<input id="import" type="file" accept=".json" hidden></label></div></header>
+<div class="intro">先看左侧 <strong>R01–R06</strong>。拖动进度条或逐帧查看，确认自车、直接前车和有效区间。无需逐帧标注。每段先点击“保存这段审核”，完成后点击“保存到工作区”；也可导出 JSON。</div>
+<main><aside><label for="filter">视频范围</label><select id="filter"><option value="priority">优先核对 6 段</option><option value="core">三个核心视角 · 43 段</option><option value="all">全部 60 段</option></select><label for="search">查找视频</label><input id="search" placeholder="例如 HV_S_EW_5"><nav id="cases"></nav><p class="muted">灰框＝原有轨迹<br>橙框＝卡车/公交检测<br>青色虚线＝新图像跟踪候选<br>框和编号均需结合原画面判断。</p></aside>
+<section class="workspace"><div class="caseHead"><div><h2 id="title"></h2><p id="meta" class="muted"></p></div><a id="rawVideo" target="_blank" rel="noopener">打开原视频 ↗</a></div><div class="question"><strong id="question"></strong><p id="assessment"></p></div>
+<div class="toolbar"><button id="prev">← 上一帧</button><button id="play">慢放</button><button id="next">下一帧 →</button><label><input type="checkbox" id="boxes" checked> 显示候选框</label><label><input type="checkbox" id="zoom"> 2 倍放大</label><span id="frameLabel"></span></div>
+<div id="viewer"><canvas id="canvas" width="1920" height="1080" aria-label="视频帧；单击候选框选车，或选择拖框模式标出车辆"></canvas></div>
+<div class="timeline"><input id="slider" type="range" min="0" max="0" value="0" aria-label="视频帧进度"><label>跳到帧 <input id="frameInput" type="number" min="0" value="0"></label><button id="jump">跳转</button></div><div id="checkpoints"></div>
+<section class="annotation"><div class="annotationHead"><h3>记录这一段</h3><span class="muted">黄＝自车 · 青＝前车；初选不等于确认</span></div><div class="formgrid">
+<label>当前选择对象<select id="role"><option value="leader">前车</option><option value="target">自车</option></select></label>
+<label>选择方式<select id="mode"><option value="click">单击现有框</option><option value="draw">拖框标出没有编号的车</option></select></label>
+<div id="selection"></div><button id="clearLeader">清除前车选择</button>
+<label>起始帧<input id="start" type="number" min="0"></label><button id="setStart">当前帧设为起点</button>
+<label>结束帧<input id="end" type="number" min="0"></label><button id="setEnd">当前帧设为终点</button>
+</div><label class="wide">这段的结论<select id="decision"><option value="">请选择结论</option><option value="confirm_pair">有前车：确认所选车辆是直接前车</option><option value="no_leader">无前车：该区间内自车没有直接前车</option><option value="leader_not_visible">前车暂时不可见：已出画或被遮挡</option><option value="uncertain">无法判断是否有前车 / 身份不确定</option><option value="target_wrong">自车框不对，请重新识别</option><option value="exclude_quality">画面质量不足，建议不使用这段</option></select></label><p id="relationHint" class="muted">无前车时只需确认自车；前车仅在部分时间存在时，请分段记录。</p>
+<label class="wide">补充说明<textarea id="note" rows="2" placeholder="例如：前车到 170 帧还是这辆；之后被杆挡住。或：是卡车，不是右边 SUV。"></textarea></label>
+<div class="savebar"><button id="save" class="primary">保存这段审核</button><span id="status" role="status"></span></div><div id="saved"></div></section>
+<details><summary>完整原视频播放（与上方逐帧区域独立）</summary><video id="video" controls preload="none"></video></details>
+<p class="muted footnote">这里只记录车辆身份和可见区间，不修改原视频、模型或三维坐标。可以为同一视频保存多个区间；换道、插入或前车变化时请分开记录。所有初选与新跟踪结果均待核验。</p>
+</section></main><script src="manifest.js"></script><script src="app.js"></script></body></html>

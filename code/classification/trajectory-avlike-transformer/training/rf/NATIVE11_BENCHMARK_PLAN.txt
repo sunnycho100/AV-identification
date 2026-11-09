@@ -1,0 +1,57 @@
+2026-10-11: native-pipeline adaptation of literature classifier families
+
+Purpose: answer the user's actual question: do paper-inspired classifier families
+improve our existing trajectory system? The four-feature/minmax/unweighted study
+is supplementary; it cannot replace the original 11-feature system comparison.
+
+Keep: 4 s at 10 Hz, follower speed entirely >22.352 m/s, exclusion of NGSIM,
+all original 11 window-local SG7 features, core-train 0.5/99.5-percentile clipping
+and standardization, original three cyclic source splits, train stride40 and
+validation/test stride10, original fixed threshold .5 and validation-BCE selection.
+No new sources or labels. Test windows and core/expanded supervised pools unchanged.
+
+Anchor: rerun CNN/core, seed42, all3folds through the extended code and require
+exact selected epoch/metrics agreement with the archived original CNN/core.
+Reuse the original five-seed CNN and Transformer core/expanded controls after
+checking source/config/preprocessing equivalence and replaying their checkpoints.
+
+New neural classifiers: ordinary last-step LSTM64x1 dropout.2 and LSTM500x3
+dropout.5, each in core and expanded, seeds42/52/62/72/82, all3folds.
+Use run.py's original training loop unchanged: batch128, AdamW lr3e-4 WD.01,
+class-balanced BCE, label smoothing.05, max60epoch/patience12, gradclip1.
+Both initialization and trained weights eligible by validation BCE.
+Expanded uses the original core/external 50/50 source/class-preserving sampler,
+with the number of draws per epoch equal to core train size. No pretraining.
+Do not transplant the paper's batch1000 or force four input channels.
+Do not assume matching epochs proves every architecture is optimally trained.
+
+New classical families: RF, RBF-SVM, KNN, both core and expanded pools.
+Preserve all 40x11 values by time-major flattening. Use observation weights
+proportional to the expected sampling mass times original class-loss weight;
+normalize weights to mean1. RF and SVM fit with sample_weight; KNN uses weighted
+neighbor votes. Thus weights retain original class/source mass, but do not claim
+classical fitting is mathematically identical to SGD. No NN label smoothing.
+Within each fold and seed, choose by validation raw BCE among fixed candidates:
+  RF: (trees, maxdepth, minleaf) = (15,8,1), (300,8,1), (300,None,5).
+  KNN: k=5,15,31 crossed with uniform/distance kernels.
+  SVM: C=.1,1,10 crossed with gamma=scale,.001,.01; probability=True.
+SVM probability estimation is internal to training. No validation refit.
+RF5seeds; KNN one fixed seed; SVM one fixed calibration seed42. All3folds.
+Record all candidate validation scores and selected settings. Different search
+budgets must be disclosed; this is a system baseline, not architecture-only proof.
+
+105 selected outer fits planned: parity3 + LSTMs60 + RF30 + SVM6 + KNN6.
+Original controls60fits reused with explicit provenance. No duplicated random
+seed results for deterministic KNN. Candidate fits counted separately.
+
+Metrics: per-seed equal mean across3sources, then mean/sample SD over seeds;
+report accuracy, balanced accuracy, raw/val-temperature BCE, AUROC, both recalls,
+and each held-out source. CATS9/10 is auxiliary same-vehicle held-record data.
+No test-driven threshold, window removal, model replacement, or stopping.
+Test sources were previously examined; these are exploratory comparisons.
+
+Audit: verify full feature tensor and train-only scaler, role IDs/labels/speed,
+supervised pool and weights, validation-only candidate selection, checkpoint
+replay and recomputed metrics. Archive committed code/config, hashes, and orx logs.
+Retain the current deployed CNN; any proposed replacement requires an explicit
+validation-based comparison, not picking the highest test accuracy after this table.

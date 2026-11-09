@@ -1,0 +1,60 @@
+{
+  "experiment": "field_todd_3s_20261102",
+  "scope": "All 13 Todd SE recordings; aim for exactly 3.0 observed seconds per video, report failures without padding or time stretching",
+  "sampling_hz": 10,
+  "samples": 31,
+  "duration_s": 3.0,
+  "selection": "Among identity-verified, fully visible, bounded-interpolation 3-second windows, minimize mean Euclidean camera-to-vehicle distance. Tie: earlier time. Never consult GPS errors or classifier outcomes.",
+  "ordinary_gap_s": 0.2,
+  "maximum_image_supported_gap_s": 0.5,
+  "maximum_extended_gap_fraction": 0.2,
+  "recovery": "Extend known ego identity with bidirectional optical flow and existing raw 3D detections. Visually adjudicate before metric export. Never turn optical flow alone into 3D depth. Never bridge source-video time jumps.",
+  "leader": "Use observed same-identity leader data when available. Keep reviewed absent/not-visible/present semantics in metadata; network uses measured feature availability only, not review category or filename. No independent ego/leader coordinate shifts.",
+  "public_data": "Re-download original OpenACC ASta/Casale/Vicolungo, fixed CATS commit and Vanderbilt step2. Verify archived SHA256. Rebuild 31-point nonoverlapping windows, retain original physical checks except remove the 50 mph floor; no NGSIM.",
+  "network": "New 3-second Transformer from random initialization: 64-dimensional ego projection plus availability-gated interaction projection and a learned missing-interaction vector; 2 encoder layers, 4 heads, trainable CLS and 31-position embeddings. All weights trainable. Exactly 31 real time samples required.",
+  "augmentation": "Five patterns of leader availability: full, all missing, prefix, suffix, internal hole; all dependent features and derivatives recomputed within available runs. Availability is independent of label. Full pattern probability 1/3, other patterns each 1/6.",
+  "public_splits": "Three cyclic Vicolungo source-group folds; source groups part2, part3, part4_highway are mutually exclusive across train/validation/test. Expanded training uses ASta/Casale/Vanderbilt and CATS excluding test1124 test9/test10. No Todd data in public training or selection.",
+  "seeds": [
+    42,
+    52,
+    62
+  ],
+  "public_training": {
+    "epochs": 40,
+    "minimum_epochs": 10,
+    "patience": 7,
+    "batch_size": 256,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.01,
+    "dropout": 0.2,
+    "selection": "validation BCE averaged over five fixed missingness patterns, equal source weight"
+  },
+  "field_training": {
+    "epochs": 50,
+    "minimum_epochs": 10,
+    "patience": 10,
+    "learning_rate": 3e-05,
+    "split": "leave one usable video out; one AV and one HV inner validation; all remaining usable videos train; full-network adaptation from fixed public fold0 seed42, not the best field test model",
+    "normalization": "fixed initial public-training statistics"
+  },
+  "threshold": 0.5,
+  "reporting": "One selected 3-second window and one prediction per usable video; average three prespecified field-seed probabilities. Record unavailable videos explicitly. This development cohort is not independent vehicle/session/camera generalization.",
+  "detection_recovery_details": {
+    "primary_checkpoint": "trajectory/checkpoints/ft102_run3_v2labels_ep5.ckpt",
+    "threshold": 0.05,
+    "minimum_projected_iou": 0.35,
+    "minimum_iou_margin": 0.15,
+    "alternative_checkpoint_attempted_on": [
+      "AV_T_WE_4",
+      "HV_T_WE_5"
+    ],
+    "alternative_checkpoint": "trajectory/checkpoints/ft102feat_run5_feat_ep5.ckpt",
+    "alternative_eligible_3s": false,
+    "in_image_override": {
+      "AV_T_EW_3": [
+        293
+      ]
+    },
+    "override_basis": "Assistant inspected native frame: actual car within image, projected 3D box overshoots lower boundary"
+  }
+}

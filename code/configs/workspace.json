@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "layout_date": "2026-11-03",
+  "paths_relative_to": "identification/code",
+  "trajectory": {
+    "root": "trajectory",
+    "entrypoint": "trajectory/scripts/pipeline/extract_trajectories.py",
+    "default_checkpoint": "trajectory/checkpoints/ft102_run3_v2labels_ep5.ckpt"
+  },
+  "classification": {
+    "root": "classification/trajectory-avlike-transformer",
+    "training_handoff": "docs/history/TRAINING_DATA_HANDOFF_20261101.txt",
+    "prepared_3s": "classification/trajectory-avlike-transformer/data/prepared_3s_20261102",
+    "entrypoint": "manage.py classify",
+    "default_config": "configs/classifier_default.json"
+  },
+  "data": {
+    "field": "data/field",
+    "annotations": "data/annotations",
+    "clip_catalog": "catalogs/field_clips.csv"
+  },
+  "outputs": {
+    "experiments": "experiments",
+    "exports": "outputs",
+    "current_todd": "experiments/field_todd_variable_20261103",
+    "current_classifier": "experiments/frozen_transfer_20261103"
+  },
+  "runtime": {
+    "launcher": "run.ps1",
+    "environments": "configs/environments.json",
+    "locks": "environments"
+  },
+  "provenance": {
+    "archives": "../archive/source_packages",
+    "revisions": "../archive/revisions",
+    "reorganization": "../archive/reorganization_20261103",
+    "verification": "catalogs/verification.json"
+  },
+  "maintenance": {
+    "package": "src/roadside_identification",
+    "cli": "manage.py",
+    "tests": "tests",
+    "source_export": "tools/export_repository.py",
+    "code_index": "docs/CODE_INDEX.md"
+  }
+}

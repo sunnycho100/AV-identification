@@ -1,0 +1,23 @@
+{
+  "experiment": "field_todd_variable_20261103",
+  "sampling_hz": 10,
+  "maximum_duration_s": 2.5,
+  "maximum_samples": 26,
+  "minimum_samples": 5,
+  "minimum_samples_reason": "Four finite-difference intervals, not a claim of sufficient behavioral evidence. Inputs below one second are retained and flagged separately.",
+  "selection": "Within the human-confirmed intervals for five reviewed clips and previously image-verified intervals for eight others: longest supported duration up to 2.5s; among equal-duration candidates choose nearest mean camera distance. Never consult GPS or class predictions.",
+  "ordinary_gap_s": 0.2,
+  "maximum_image_supported_gap_s": 0.5,
+  "maximum_extended_gap_fraction": 0.2,
+  "image_identity": "Human anchors dominate. Flow only to adjacent anchors or the reviewed bounds; conflicting image votes are not used as 3D support. Do not infer depth from a 2D box.",
+  "association": {"minimum_iou": 0.35, "minimum_iou_margin": 0.15, "minimum_score": 0.05},
+  "reconstruction": "Existing BEV checkpoint and camera calibration; native-time jump rejection and RTS smoothing unchanged. No extrapolation, no independent ego/leader alignment, no newly fitted GPS offsets.",
+  "public_initialization": "Existing 3-second public fold0 checkpoints, seeds 42/52/62. Reuse exactly their source-disjoint partition. All weights trainable; retain positional embedding shape and use only real 0.1s positions.",
+  "public_augmentation": "Ten variants per source window: five leader-availability patterns at 26 points, plus the same five patterns at a shared randomly selected length 5..25. Crop before computing derivatives. Missing leader values and padded time are masked separately. Variant generation and sampling are independent of class.",
+  "seeds": [42, 52, 62],
+  "public_training": {"epochs": 20, "minimum_epochs": 5, "patience": 5, "batch_size": 256, "learning_rate": 0.0001, "weight_decay": 0.01},
+  "field_training": {"epochs": 50, "minimum_epochs": 10, "patience": 10, "learning_rate": 0.00003, "weight_decay": 0.01},
+  "field_split": "Leave one eligible video out; one AV and one HV validation video; others train. All variants of a video remain in the same split. Three seeds averaged, threshold fixed at 0.5. Same camera/vehicle and potentially sessions recur: development estimate only.",
+  "normalization": "Preserve each public initialization's source-training statistics. Never fit normalization on Todd validation or test videos.",
+  "reporting": "One selected window and one out-of-fold prediction per eligible video. Report actual length, short-input flag, GPS coverage and source-only versus adapted results. Earlier 3-second results are shown on common videos with changed-data confounding stated. No new detector training in this run."
+}

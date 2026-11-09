@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Review UI self-test</title></head><body style="margin:0"><iframe id="app" src="index.html" style="width:100%;height:1200px;border:0"></iframe><pre id="result">RUNNING</pre><script>
+(async()=>{
+const checks=[],errors=[];let w,d,exported;
+function check(name,condition){checks.push({name,pass:!!condition});if(!condition)throw Error(name);}
+async function wait(fn){for(let i=0;i<300;i++){try{if(fn())return;}catch(e){}await new Promise(r=>setTimeout(r,30));}throw Error('timeout');}
+try{
+await wait(()=>document.getElementById('app').contentWindow.document.getElementById('canvas'));
+w=document.getElementById('app').contentWindow;d=w.document;
+w.addEventListener('error',e=>errors.push(e.message));
+await wait(()=>w.eval('!!data && !!im'));
+check('six_priority_cases',d.querySelectorAll('#cases button').length===6);
+check('initial_source_frame_matches_applied_review',d.getElementById('frameLabel').textContent.includes(String(w.eval('current.frame'))));
+check('native_image_loaded',w.eval('im.naturalWidth===1920 && im.naturalHeight===1080'));
+check('no_fabricated_local_annotation',w.eval('decisions.length===0'));
+if(w.eval('!!current.applied_review')){check('applied_43_visible',w.eval('M.applied_review_count===43'));check('applied_absence_has_no_leader',w.eval('draft().decision==="no_leader" && draft().leader===null && draft().target.id==="43"'));}
+d.getElementById('decision').value='uncertain';d.getElementById('decision').dispatchEvent(new w.Event('change'));d.getElementById('role').value='leader';
+d.getElementById('frameInput').value=140;d.getElementById('jump').click();await wait(()=>w.eval('data.frames[fi].frame===140 && !!im'));
+d.getElementById('clearLeader').click();check('clear_selection',w.eval('draft().leader===null'));
+let canvas=d.getElementById('canvas'),r=canvas.getBoundingClientRect();
+function pointer(type,x,y){canvas.dispatchEvent(new w.PointerEvent(type,{bubbles:true,pointerId:1,clientX:r.left+x/1920*r.width,clientY:r.top+y/1080*r.height}));}
+pointer('pointerdown',1044,457);
+check('click_resolves_track_39',w.eval('draft().leader.type==="track" && draft().leader.id==="39"'));
+d.getElementById('start').value=140;d.getElementById('end').value=150;d.getElementById('decision').value='confirm_pair';d.getElementById('note').value='BROWSER QA ONLY';d.getElementById('save').click();
+check('save_interval',w.eval('decisions.length===1 && decisions[0].start_frame===140 && decisions[0].end_frame===150'));
+d.getElementById('end').value=130;d.getElementById('save').click();check('reject_reversed_interval',w.eval('decisions.length===1')&&d.getElementById('status').className==='error');
+d.getElementById('end').value=150;d.getElementById('mode').value='draw';pointer('pointerdown',1003,425);pointer('pointermove',1098,483);pointer('pointerup',1098,483);
+check('manual_box_native_coordinates',w.eval('JSON.stringify(draft().leader.bbox)==="[1003,425,1098,483]"'));
+d.getElementById('save').click();check('manual_seed_saved',w.eval('decisions.length===2 && decisions[1].leader.type==="manual_box"'));
+const oldCreate=w.URL.createObjectURL,oldClick=w.HTMLAnchorElement.prototype.click;
+w.URL.createObjectURL=blob=>{exported=blob;return 'blob:qa-only';};w.HTMLAnchorElement.prototype.click=function(){};
+d.getElementById('export').click();const payload=JSON.parse(await exported.text());
+check('export_contains_both_intervals',payload.schema==='field-leader-decisions/v1'&&payload.records.length===2&&payload.records[1].leader.bbox[0]===1003);
+w.URL.createObjectURL=oldCreate;w.HTMLAnchorElement.prototype.click=oldClick;
+const originalFetch=w.fetch;let savedRequest=null;
+w.fetch=async(url,options)=>{savedRequest={url,doc:JSON.parse(options.body)};return{ok:true,json:async()=>({ok:true,records:2,path:'QA_ONLY_NO_DISK_WRITE'})};};
+d.getElementById('saveWorkspace').click();await wait(()=>savedRequest!==null);
+check('save_button_accepts_forwarded_origin',savedRequest.url==='/api/leader-review/save'&&savedRequest.doc.records.length===2);
+w.fetch=originalFetch;
+check('browser_draft_persistence',JSON.parse(w.localStorage.getItem('field_leader_review_20261102/decisions/v1')).length===2);
+check('explicit_no_leader_option',!!d.querySelector('#decision option[value="no_leader"]'));
+d.getElementById('decision').value='no_leader';d.getElementById('decision').dispatchEvent(new w.Event('change'));
+check('no_leader_clears_front_selection',w.eval('draft().leader===null')&&d.getElementById('role').value==='target');
+d.getElementById('save').click();
+check('no_leader_keeps_ego_and_null_front',w.eval('decisions.length===3 && decisions[2].leader_state==="absent" && decisions[2].leader===null && decisions[2].target.id==="43"'));
+d.getElementById('decision').value='leader_not_visible';d.getElementById('decision').dispatchEvent(new w.Event('change'));d.getElementById('save').click();
+check('invisible_distinct_from_absent',w.eval('decisions.length===4 && decisions[3].leader_state==="not_visible" && decisions[3].leader===null'));
+w.URL.createObjectURL=blob=>{exported=blob;return 'blob:qa-only';};w.HTMLAnchorElement.prototype.click=function(){};
+d.getElementById('export').click();const absenceExport=await exported.text();
+check('absence_export_is_structured',JSON.parse(absenceExport).records[2].leader_state==='absent');
+w.URL.createObjectURL=oldCreate;w.HTMLAnchorElement.prototype.click=oldClick;
+d.querySelector('#saved .savedRow:last-child button').click();d.querySelector('#saved .savedRow:last-child button').click();
+const transferred=new w.DataTransfer();transferred.items.add(new w.File([absenceExport],'qa-roundtrip.json',{type:'application/json'}));d.getElementById('import').files=transferred.files;d.getElementById('import').dispatchEvent(new w.Event('change'));
+await wait(()=>w.eval('decisions.length===4'));
+check('absence_import_roundtrip',w.eval('decisions[2].leader_state==="absent" && decisions[3].leader_state==="not_visible"'));
+d.getElementById('filter').value='all';d.getElementById('filter').dispatchEvent(new w.Event('change'));check('all_60_available',d.querySelectorAll('#cases button').length===60);
+d.getElementById('filter').value='core';d.getElementById('filter').dispatchEvent(new w.Event('change'));check('core_43_available',d.querySelectorAll('#cases button').length===43);
+const case3=[...d.querySelectorAll('#cases button')].find(b=>b.textContent.includes('AV_T_EW_7'));case3.click();await wait(()=>w.eval('current.clip==="AV_T_EW_7" && !!data && !!im'));
+check('case_switch_and_full_video',d.getElementById('frameLabel').textContent.includes(String(w.eval('current.frame')))&&d.getElementById('video').src.includes('AV_T_EW_7.mp4'));
+check('no_javascript_errors',errors.length===0);
+document.getElementById('result').textContent=JSON.stringify({status:'PASS',checks,errors});
+}catch(e){document.getElementById('result').textContent=JSON.stringify({status:'FAIL',error:e.message,checks,errors});}
+finally{if(w){w.localStorage.removeItem('field_leader_review_20261102/decisions/v1');w.localStorage.removeItem('field_leader_review_20261102/drafts/v1');}}
+})();
+</script></body></html>

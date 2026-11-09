@@ -1,0 +1,875 @@
+{
+  "clip": "DEMO_FROZEN_TAIL",
+  "width": 960,
+  "height": 540,
+  "frames": [
+    {
+      "frame": 0,
+      "t_s": 0.0,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            80,
+            220,
+            165,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 1,
+      "t_s": 0.1,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            92,
+            220,
+            177,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 2,
+      "t_s": 0.2,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            104,
+            220,
+            189,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 3,
+      "t_s": 0.3,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            116,
+            220,
+            201,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 4,
+      "t_s": 0.4,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            128,
+            220,
+            213,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 5,
+      "t_s": 0.5,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            140,
+            220,
+            225,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 6,
+      "t_s": 0.6,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            152,
+            220,
+            237,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 7,
+      "t_s": 0.7,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            164,
+            220,
+            249,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 8,
+      "t_s": 0.8,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            176,
+            220,
+            261,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 9,
+      "t_s": 0.9,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            188,
+            220,
+            273,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 10,
+      "t_s": 1.0,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            200,
+            220,
+            285,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 11,
+      "t_s": 1.1,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            212,
+            220,
+            297,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 12,
+      "t_s": 1.2,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            224,
+            220,
+            309,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 13,
+      "t_s": 1.3,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            236,
+            220,
+            321,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 14,
+      "t_s": 1.4,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            248,
+            220,
+            333,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 15,
+      "t_s": 1.5,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            260,
+            220,
+            345,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 16,
+      "t_s": 1.6,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            272,
+            220,
+            357,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 17,
+      "t_s": 1.7,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            284,
+            220,
+            369,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 18,
+      "t_s": 1.8,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            296,
+            220,
+            381,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 19,
+      "t_s": 1.9,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            308,
+            220,
+            393,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 20,
+      "t_s": 2.0,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            320,
+            220,
+            405,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 21,
+      "t_s": 2.1,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            332,
+            220,
+            417,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 22,
+      "t_s": 2.2,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            344,
+            220,
+            429,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 23,
+      "t_s": 2.3,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            356,
+            220,
+            441,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 24,
+      "t_s": 2.4,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            368,
+            220,
+            453,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 25,
+      "t_s": 2.5,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            380,
+            220,
+            465,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 26,
+      "t_s": 2.6,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            392,
+            220,
+            477,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 27,
+      "t_s": 2.7,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            404,
+            220,
+            489,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 28,
+      "t_s": 2.8,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            416,
+            220,
+            501,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 29,
+      "t_s": 2.9,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            428,
+            220,
+            513,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 30,
+      "t_s": 3.0,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            440,
+            220,
+            525,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 31,
+      "t_s": 3.1,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            452,
+            220,
+            537,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 32,
+      "t_s": 3.2,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            464,
+            220,
+            549,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 33,
+      "t_s": 3.3,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            476,
+            220,
+            561,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 34,
+      "t_s": 3.4,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            488,
+            220,
+            573,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 35,
+      "t_s": 3.5,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            500,
+            220,
+            585,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 36,
+      "t_s": 3.6,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            512,
+            220,
+            597,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 37,
+      "t_s": 3.7,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            524,
+            220,
+            609,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 38,
+      "t_s": 3.8,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            536,
+            220,
+            621,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 39,
+      "t_s": 3.9,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            548,
+            220,
+            633,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 40,
+      "t_s": 4.0,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 41,
+      "t_s": 4.1,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 42,
+      "t_s": 4.2,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 43,
+      "t_s": 4.3,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 44,
+      "t_s": 4.4,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 45,
+      "t_s": 4.5,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 46,
+      "t_s": 4.6,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 47,
+      "t_s": 4.7,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 48,
+      "t_s": 4.8,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 49,
+      "t_s": 4.9,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    },
+    {
+      "frame": 50,
+      "t_s": 5.0,
+      "boxes": [
+        {
+          "id": "demo-target",
+          "bbox": [
+            560,
+            220,
+            645,
+            270
+          ],
+          "kind": "track",
+          "observed": true
+        }
+      ]
+    }
+  ],
+  "timestamp_gaps": []
+}

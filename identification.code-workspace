@@ -1,0 +1,146 @@
+{
+  "folders": [
+    {
+      "name": "code",
+      "path": "code"
+    }
+  ],
+  "settings": {
+    "files.encoding": "utf8",
+    "remote.portsAttributes": {
+      "8765": {
+        "label": "Trajectory review",
+        "onAutoForward": "notify"
+      }
+    },
+    "remote.restoreForwardedPorts": true,
+    "search.exclude": {
+      "**/.runtime/**": true,
+      "**/.venv*/**": true,
+      "**/node_modules/**": true,
+      "**/__pycache__/**": true,
+      "**/archive/**": true,
+      "**/trajectory/outputs/**": true,
+      "**/trajectory/data/**": true,
+      "**/classification/**/artifacts/**": true
+    },
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/node_modules": true,
+      "**/.runtime": true,
+      "**/.venv-bev": true,
+      "**/.venv-classifier": true
+    },
+    "python.defaultInterpreterPath": "${workspaceFolder:code}/.venv-bev/Scripts/python.exe"
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "identification: start review server (SSH)",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder:code}/run.ps1",
+          "review"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder:code}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated"
+        }
+      },
+      {
+        "label": "identification: verify workspace",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder:code}/run.ps1",
+          "verify"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder:code}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated"
+        }
+      },
+      {
+        "label": "identification: check legacy classifiers",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder:code}/run.ps1",
+          "check-models"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder:code}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated"
+        }
+      },
+      {
+        "label": "identification: check three-second experiment",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder:code}/run.ps1",
+          "check-3s"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder:code}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated"
+        }
+      },
+      {
+        "label": "identification: show environments",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder:code}/run.ps1",
+          "environment"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder:code}"
+        },
+        "problemMatcher": [],
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated"
+        }
+      }
+    ]
+  }
+}
